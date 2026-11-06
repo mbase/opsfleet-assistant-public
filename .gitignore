@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.idea/
+.DS_Store
+*.egg-info/
+build/
+dist/
+runtime/
+*.log
+
+# Generated evaluation output; scenario/source contracts remain tracked.
+docs/remediation/runs/

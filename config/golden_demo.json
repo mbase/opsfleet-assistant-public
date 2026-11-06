@@ -1,0 +1,25 @@
+[
+  {
+    "trio_id": "GK-001", "version": 1, "status": "approved", "visibility": "global_methodology", "brand_scope": [],
+    "schema_version": 1, "metric": "revenue", "metric_version": 1, "operation": "time_series",
+    "method": "monthly_revenue_trend", "keywords": ["sales", "revenue", "trend", "trajectory", "pattern", "evolution"],
+    "question": "Synthetic authored example: How did sales move over a year?",
+    "reference_sql": "-- SYNTHETIC HISTORICAL EXAMPLE ONLY; NEVER EXECUTE\nSELECT month, revenue FROM illustrative_monthly_revenue;",
+    "analyst_report": "Synthetic authored example: compare monthly revenue and describe variation without causal claims.",
+    "provenance": "OpsFleet prototype authors; synthetic, no human analyst source", "source_date": "2026-11-03"
+  },
+  {
+    "trio_id": "GK-002", "version": 1, "status": "retired", "visibility": "global_methodology", "brand_scope": [],
+    "schema_version": 1, "metric": "revenue", "metric_version": 1, "operation": "time_series",
+    "method": "monthly_revenue_trend", "keywords": ["sales", "trend"],
+    "question": "Synthetic retired example", "reference_sql": "SELECT 1", "analyst_report": "Retired example, never used.",
+    "provenance": "OpsFleet prototype authors; synthetic", "source_date": "2026-11-03"
+  },
+  {
+    "trio_id": "GK-003", "version": 1, "status": "approved", "visibility": "brand_restricted", "brand_scope": ["Volcom"],
+    "schema_version": 1, "metric": "revenue", "metric_version": 1, "operation": "time_series",
+    "method": "monthly_revenue_trend", "keywords": ["sales", "trend"],
+    "question": "Synthetic restricted example", "reference_sql": "SELECT 1", "analyst_report": "Restricted example, never shown to other scopes.",
+    "provenance": "OpsFleet prototype authors; synthetic", "source_date": "2026-11-03"
+  }
+]

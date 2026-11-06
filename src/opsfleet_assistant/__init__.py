@@ -1,0 +1,1 @@
+"""OpsFleet retail assistant prototype."""

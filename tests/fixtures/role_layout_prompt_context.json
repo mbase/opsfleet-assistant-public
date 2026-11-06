@@ -1,0 +1,119 @@
+{
+  "provenance": "Authored scenario context reconstructed read-only; only safe model-context metadata and typed prior plan. No raw model output or credentials.",
+  "reference_date": "2026-11-05",
+  "question": "Keep the analysis and baseline. Target the actions at Q2 2026 instead of Q1; keep the concise table.",
+  "previous_plan": {
+    "version": 1,
+    "operation": "aggregate",
+    "metric": "revenue",
+    "period": {
+      "start": "2025-10-01",
+      "end": "2026-01-01"
+    },
+    "cutoff_date": null,
+    "dimension": null,
+    "requested_brands": null,
+    "product_ids": null,
+    "demographic_values": null,
+    "revenue_statuses": [
+      "Complete"
+    ],
+    "inactivity_days": 90,
+    "limit": 20
+  },
+  "context": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Make a concise table revenue report for Q4 2025 compared with Q4 2024, with next-quarter actions, Complete only."
+      }
+    ],
+    "pending_request": null,
+    "unresolved_fields": [],
+    "pending_temporal_anchors": {},
+    "last_request": {
+      "mode": "report",
+      "queries": [
+        {
+          "operation": "aggregate",
+          "metric": "revenue",
+          "revenue_statuses": [
+            "Complete"
+          ]
+        },
+        {
+          "operation": "aggregate",
+          "metric": "revenue",
+          "temporal_role": "comparison",
+          "revenue_statuses": [
+            "Complete"
+          ]
+        }
+      ],
+      "analysis": {
+        "kind": "quarter",
+        "year": {
+          "kind": "absolute",
+          "value": 2025
+        },
+        "quarter": 4
+      },
+      "comparison": {
+        "kind": "quarter",
+        "year": {
+          "kind": "absolute",
+          "value": 2024
+        },
+        "quarter": 4
+      },
+      "action": {
+        "kind": "reference",
+        "unit": "quarter",
+        "offset": 1,
+        "reference": "analysis"
+      },
+      "report": {
+        "purpose": "comparison",
+        "requested_sections": [
+          "summary",
+          "performance_table",
+          "comparison",
+          "recommendations"
+        ],
+        "presentation": "table",
+        "detail": "concise"
+      }
+    },
+    "released_evidence": [
+      {
+        "index": 0,
+        "operation": "aggregate",
+        "columns": [
+          "revenue"
+        ],
+        "period": {
+          "period_start": "2025-10-01",
+          "period_end": "2026-01-01"
+        },
+        "as_of": "2026-11-05T00:00:00+00:00",
+        "rows": 1,
+        "complete": true
+      },
+      {
+        "index": 1,
+        "operation": "aggregate",
+        "columns": [
+          "revenue"
+        ],
+        "period": {
+          "period_start": "2024-10-01",
+          "period_end": "2025-01-01"
+        },
+        "as_of": "2026-11-05T00:00:00+00:00",
+        "rows": 1,
+        "complete": true
+      }
+    ],
+    "cohort_origin": "business"
+  }
+}

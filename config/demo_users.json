@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "users": [
+    {"user_id": "manager_apparel", "role": "manager", "brands": ["Calvin Klein", "Carhartt"]},
+    {"user_id": "manager_casual", "role": "manager", "brands": ["Hanes", "Volcom"]},
+    {"user_id": "ceo", "role": "ceo", "brands": []}
+  ]
+}

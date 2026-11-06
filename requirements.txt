@@ -1,0 +1,3 @@
+# Runtime direct dependencies are pinned in pyproject.toml.
+# Use requirements.step4.lock for the observed resolved Step 4 development environment.
+-e .

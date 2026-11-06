@@ -1,0 +1,230 @@
+[
+  {
+    "run_id": "save-guard-terminal-20261106-01",
+    "source_revision": "797a82f20338305ff2ee15318192e366fd2dfa07d07533c737d3fec1f4e841f6",
+    "question": "Save that exact analysis as a report.",
+    "preceding_interpretation": {
+      "clear_fields": [],
+      "context_action": "correct",
+      "issues": [],
+      "request": {
+        "analysis": {
+          "kind": "month",
+          "month": 2,
+          "year": {
+            "kind": "absolute",
+            "value": 2024
+          }
+        },
+        "intent": "analysis",
+        "mode": "analysis",
+        "purpose": "standard",
+        "queries": [
+          {
+            "inactivity_days": 90,
+            "limit": 20,
+            "metric": "revenue",
+            "operation": "aggregate",
+            "revenue_statuses": [
+              "Complete"
+            ],
+            "temporal_role": "analysis"
+          }
+        ],
+        "sources": [
+          {
+            "field": "analysis",
+            "origin": "explicit",
+            "phrase": "February 2024"
+          },
+          {
+            "field": "metric",
+            "origin": "context"
+          },
+          {
+            "field": "statuses",
+            "origin": "context"
+          }
+        ]
+      },
+      "status": "ready",
+      "temporal_updates": [
+        "analysis"
+      ]
+    },
+    "expanded_save": {
+      "clear_fields": [],
+      "context_action": "correct",
+      "issues": [],
+      "request": {
+        "analysis": {
+          "kind": "month",
+          "month": 2,
+          "year": {
+            "kind": "absolute",
+            "value": 2024
+          }
+        },
+        "intent": "save",
+        "mode": "report",
+        "purpose": "standard",
+        "queries": [
+          {
+            "inactivity_days": 90,
+            "limit": 20,
+            "metric": "revenue",
+            "operation": "aggregate",
+            "revenue_statuses": [
+              "Complete"
+            ],
+            "temporal_role": "analysis"
+          }
+        ],
+        "report": {
+          "detail": "standard",
+          "presentation": "narrative",
+          "purpose": "performance",
+          "requested_sections": [
+            "summary",
+            "performance_table",
+            "limitations",
+            "recommendations"
+          ]
+        },
+        "sources": [
+          {
+            "field": "metric",
+            "origin": "context",
+            "phrase": "Revenue"
+          },
+          {
+            "field": "statuses",
+            "origin": "context",
+            "phrase": "Complete items only"
+          },
+          {
+            "field": "analysis",
+            "origin": "context",
+            "phrase": "February 2024"
+          }
+        ]
+      },
+      "status": "ready",
+      "temporal_updates": []
+    }
+  },
+  {
+    "run_id": "provider-terminal-20261106-095442-697bdc-journey",
+    "source_revision": "473238a77459f0bd9242e2a86cc54e2746037f2b952d3c859a7ab58b777cab43",
+    "question": "Save that exact analysis as a report.",
+    "preceding_interpretation": {
+      "clear_fields": [],
+      "context_action": "correct",
+      "issues": [],
+      "request": {
+        "analysis": {
+          "kind": "month",
+          "month": 2,
+          "year": {
+            "kind": "absolute",
+            "value": 2024
+          }
+        },
+        "intent": "analysis",
+        "mode": "analysis",
+        "purpose": "standard",
+        "queries": [
+          {
+            "inactivity_days": 90,
+            "limit": 10,
+            "metric": "revenue",
+            "operation": "aggregate",
+            "revenue_statuses": [
+              "Complete"
+            ],
+            "temporal_role": "analysis"
+          }
+        ],
+        "sources": [
+          {
+            "field": "analysis",
+            "origin": "explicit",
+            "phrase": "February 2024"
+          },
+          {
+            "field": "metric",
+            "origin": "context"
+          },
+          {
+            "field": "statuses",
+            "origin": "context"
+          }
+        ]
+      },
+      "status": "ready",
+      "temporal_updates": [
+        "analysis"
+      ]
+    },
+    "expanded_save": {
+      "clear_fields": [],
+      "context_action": "continue",
+      "issues": [],
+      "request": {
+        "analysis": {
+          "kind": "month",
+          "month": 2,
+          "year": {
+            "kind": "absolute",
+            "value": 2024
+          }
+        },
+        "intent": "save",
+        "mode": "report",
+        "purpose": "standard",
+        "queries": [
+          {
+            "inactivity_days": 90,
+            "limit": 10,
+            "metric": "revenue",
+            "operation": "aggregate",
+            "revenue_statuses": [
+              "Complete"
+            ],
+            "temporal_role": "analysis"
+          }
+        ],
+        "report": {
+          "detail": "standard",
+          "presentation": "narrative",
+          "purpose": "performance",
+          "requested_sections": [
+            "summary",
+            "performance_table",
+            "limitations",
+            "recommendations"
+          ]
+        },
+        "sources": [
+          {
+            "field": "metric",
+            "origin": "context",
+            "phrase": "Revenue"
+          },
+          {
+            "field": "analysis",
+            "origin": "context",
+            "phrase": "February 2024"
+          },
+          {
+            "field": "statuses",
+            "origin": "context",
+            "phrase": "Complete items only"
+          }
+        ]
+      },
+      "status": "ready",
+      "temporal_updates": []
+    }
+  }
+]
