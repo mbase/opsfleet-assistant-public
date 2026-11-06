@@ -97,21 +97,21 @@ sequenceDiagram
   I-->>A: Trusted subject, scope version, allowed brands
   A->>P: Load pinned metric/persona and compatible approved Golden candidates
   P-->>A: Up to 3 approved method summaries + IDs/versions
-  A->>M: Minimized intent + method summaries; no raw SQL/data
+  A->>M: Minimized intent + method summaries, no raw SQL/data
   M-->>A: Typed AnalysisPlan (no SQL or permissions)
   A->>D: Authenticated service call + signed user context + plan
-  D->>D: Recheck scope; validate fields, metric, parameters, limits; compile SQL
+  D->>D: Recheck scope, validate fields, metric, parameters, limits, compile SQL
   D->>B: Dry run, byte cap, then idempotent query job
   B-->>D: Bounded result and job metadata
   D->>D: Validate schema, values, brand scope, PII, suppression, completeness
   D-->>A: Safe Evidence + coverage + job/as-of references
-  A->>M: Safe Evidence + allowed persona; no tools
+  A->>M: Safe Evidence + allowed persona, no tools
   M-->>A: Qualitative draft, hypotheses/actions
-  A->>A: Reconcile every numeric claim to evidence; add caveats and limits
+  A->>A: Reconcile every numeric claim to evidence, add caveats and limits
   A->>P: Optional idempotent report save with owner, scope and evidence refs
   A-->>E: Answer/report + scope, as-of, completeness and trace ID
-  Note over A,D: One 120s deadline; max 6 model calls, 8 executions, 512 MiB/job, 1 GiB/turn
-  Note over A,B: Dry-run retry only within budget; never replay an ambiguous submitted job
+  Note over A,D: One 120s deadline, max 6 model calls, 8 executions, 512 MiB/job, 1 GiB/turn
+  Note over A,B: Dry-run retry only within budget, never replay an ambiguous submitted job
 ```
 
 The agent pins user authorization, metric, persona, compiler/schema and Golden versions for the full turn. Each follow-up revalidates current authorization and invalidates incompatible prior evidence. The gateway applies scope before grouping/aggregation, uses named bound parameters, dry-runs each statement and enforces job and cumulative limits. An empty result does not trigger broader dates, brands, statuses or products. An invalid SQL or schema result can cause one trusted recompilation from the same validated plan, then stops safely. Provider transient fallback is bounded and charged to the same budget; an alternate model must pass the same evaluation before production use.
@@ -130,20 +130,20 @@ sequenceDiagram
   A->>P: Select active reports for authenticated owner and exact conversation/literal selector
   P-->>A: Exact IDs, versions, safe titles (or no match)
   A->>P: Transaction: persist owner, target snapshot, expiry, token digest, pending state
-  A-->>E: Preview count/list/rule/expiry + single-use token; no mutation
+  A-->>E: Preview count/list/rule/expiry + single-use token, no mutation
   alt Explicit confirm before expiry
     E->>A: confirm token + fresh JWT
-    A->>P: BEGIN; recheck owner, token, expiry, state, every target version/active state
+    A->>P: BEGIN, recheck owner, token, expiry, state, every target version/active state
     P->>P: Soft-delete exact snapshot, increment versions, consume proposal, write audit + outbox
     P-->>A: Commit result
     A-->>E: Deleted count and retained-byte notice
     P->>O: Durable cleanup event
     O->>G: Idempotently remove derived artifacts/index references
-    O->>P: Mark cleanup state; retry safely
+    O->>P: Mark cleanup state, retry safely
   else Cancel, stale, expired or failed check
     E->>A: cancel token / expired / stale target
-    A->>P: Consume/cancel proposal; no report mutation
-    A-->>E: No change; repeat preview if stale
+    A->>P: Consume/cancel proposal, no report mutation
+    A-->>E: No change, repeat preview if stale
   end
 ```
 
@@ -164,22 +164,22 @@ sequenceDiagram
   participant G as GCS immutable versions
   participant R as Reviewer / promotion policy
   U->>A: Completed/corrected analysis or analyst trio submission
-  A->>P: Store candidate metadata, provenance, evidence refs, source scope; enqueue outbox
+  A->>P: Store candidate metadata, provenance, evidence refs, source scope, enqueue outbox
   P-->>W: Candidate job (at least once)
   W->>W: DLP/PII, ownership/visibility, duplicate, metric/schema and prompt-injection checks
   W->>B: Validate supported plan against held-out fixtures and current authorized test scope
   B-->>W: Numerical agreement, dry-run cost and policy result
-  alt Established pattern; every automatic gate passes
+  alt Established pattern, every automatic gate passes
     W->>G: Write immutable candidate version
     W->>P: Transactionally publish approved metadata/index version and active pointer
   else Novel method, metric, contradiction or failed confidence gate
-    W->>P: Mark quarantined or review-required; do not index for production retrieval
+    W->>P: Mark quarantined or review-required, do not index for production retrieval
     P-->>R: Review task with provenance and safe evidence
     R->>W: Approve, revise, reject or retire with actor/reason
     W->>G: Write immutable approved version if accepted
-    W->>P: Publish version/index; retain prior pointer for rollback
+    W->>P: Publish version/index, retain prior pointer for rollback
   end
-  Note over P,A: Normal query retrieves only approved compatible active versions; pin trio IDs/version per turn
+  Note over P,A: Normal query retrieves only approved compatible active versions, pin trio IDs/version per turn
   R->>W: Roll back or retire version
   W->>P: Move active pointer / tombstone index version, record audit event
 ```

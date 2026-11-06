@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "revision": "1325040442f7dc85dd4eab8bfdf109650e56add5d4f087d6da5ffb18644b3ace",
-  "previous_preparation_revision": "9707330934749e4b58d0588205b9d26b96093917d992cc6b78564363e1a80a56",
+  "revision": "ad9a797351036b8579d62a7a4acf95ca5c544303816ac7c165e8c24b2b4d9f65",
+  "previous_preparation_revision": "1325040442f7dc85dd4eab8bfdf109650e56add5d4f087d6da5ffb18644b3ace",
   "algorithm": "sha256 of UTF-8 <file sha256>  <relative path> newline lines ordered by relative path",
   "scenario_version": "opsfleet-evaluation-v5-20261106",
   "scenario_sha256": "45c3159f84b95cf7c85afc201e79f7aac170f54ee8f705b0b3a14e3d2102bef8",
@@ -11,7 +11,7 @@
     ".env.example": "75e0204b08415b33b8f45c87ed984f03f2fb0cedd6599619dac95a1d7c06b6f4",
     ".gitignore": "01f64e743c58b4556c7ba069bb961ac9491c73ee1b85088e72bb23471a0174cd",
     "EXAMPLE_RUNS.md": "99c451bf0a30c46852f6e0be5904a15f1064d463b8b0288a333cadec1613f6d9",
-    "HLD.md": "21fb159769fe3974784d9a614178ddcd539a55292a24ea7f0e10442f2d4f7a2e",
+    "HLD.md": "fbdb8c2fc4c2116f9192abf3c37d835b31a3fcef102be933ea2c01834dafc592",
     "README.md": "caf963c667de5d3203f8e7b4cb46ea948c267d4f3d3c17b12a2254bdf54ab449",
     "TECHNICAL_DESIGN.md": "13971cf1f80aaaf304fd9a439c35ebd968460ee996f5f0f5b4e427528fbdec1f",
     "config/demo_users.json": "e83f786079d337c02819bd6c314afd02806357038a5e0edfd160102d239a2210",
