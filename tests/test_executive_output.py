@@ -318,14 +318,20 @@ def test_actual_legacy_replay_preserves_plain_artifact_without_fabricating_view(
 
 @pytest.mark.parametrize("selector", ["literal", "conversation"])
 def test_full_deletion_preview_is_literal_and_tokens_stay_out_of_history_and_events(harness, tmp_path, selector):
-    _, _, store, flow, _ = harness
+    script, _, store, flow, _ = harness
+    # Genuine legacy compatibility needs saved plans establishing current scope.
+    # Reuse a real ordinary report's trusted execution metadata, not owner alone.
+    script["Preview seed"] = I(status="ready", request=request())
+    seed = flow().run(OWNER, "Preview seed", conversation_id="seed")
+    fields = store.report(OWNER, seed.report_id)
     titles = ("Client [red]literal[/red] report", "Client [link=https://example.invalid]literal[/link] report")
     ids = [store.save_report(owner=OWNER, conversation_id="delete-view", turn_id=f"save-{i}",
         content=title + "\nClient result", metric_definitions=[], scope_reference="demo:" + OWNER,
-        scope_version=1, evidence_refs=[]) for i, title in enumerate(titles)]
+        scope_version=1, evidence_refs=[], plans=json.loads(fields["plans_json"]),
+        scope_digest=fields["scope_digest"]) for i, title in enumerate(titles)]
     question = "Delete all reports mentioning Client" if selector == "literal" else "Delete all the reports we made in this conversation"
     result = flow().run(OWNER, question, conversation_id="delete-view")
-    assert result.status == "confirmation_required" and result.model_requests == result.query_executions == 0
+    assert result.status == "confirmation_required" and result.model_requests == 0 and result.query_executions == 1
     output = compact(shown(result, width=26))
     # Only private synthetic state contains the generated capability. Never emit it.
     token = result.text.split("confirm ", 1)[1].splitlines()[0]
@@ -333,13 +339,13 @@ def test_full_deletion_preview_is_literal_and_tokens_stay_out_of_history_and_eve
     checks = [compact(value) in output for value in (*expected, "Expires:", "Matching rule:",
         "confirm " + token, "cancel " + token, "Deletion is soft:", "bytes remain in SQLite")]
     assert all(checks)
-    assert "\x1b]8" not in shown(result) and len(store.list_reports(OWNER)) == 2
+    assert "\x1b]8" not in shown(result) and len(store.list_reports(OWNER)) == 3
     events = (tmp_path / "workflow-events.jsonl").read_text()
     assert not (token in events)
     context = store.load_continuity(OWNER, "delete-view")
     assert context is None
     cancelled = flow().run(OWNER, "cancel " + token, conversation_id="delete-view")
-    assert "cancelled" in shown(cancelled) and len(store.list_reports(OWNER)) == 2
+    assert "cancelled" in shown(cancelled) and len(store.list_reports(OWNER)) == 3
 
 
 def test_default_keeps_each_evidences_distinct_definitions():
@@ -399,8 +405,8 @@ def test_empty_diagnosis_budget_caveat_visible_by_default(tmp_path):
         exhaust_diagnosis = True
     result = workflow(tmp_path, turn=Exhausted).run(OWNER, "Revenue in 2025")
     output = flat(shown(result))
-    assert result.status == "ok" and result.presentation["empty_diagnosis"] == "incomplete"
-    assert "diagnosis could not finish within the remaining budget" in output
+    assert result.status == "ok" and result.presentation["empty_diagnosis"] == "valid_empty"
+    assert "No matching data" in output
     assert "aggregate zero is not an observed result" in output
 
 

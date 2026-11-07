@@ -2,6 +2,8 @@
 
 **Status:** production target design, not deployed. The runnable prototype is a local Python CLI using SQLite and BigQuery public data. Nothing in this document asserts that Cloud Run, Cloud SQL, GCS, Vertex AI, managed telemetry, or production identity controls have been provisioned.
 
+The prototype now includes bounded product-revenue, state purchaser-spend and country inactivity-change playbooks (Part 2, awaiting review); see [technical contracts](TECHNICAL_DESIGN.md#9-part-2-analytical-playbooks). These do not implement the production services below.
+
 ## 1. Scope and design assumptions
 
 The production service gives authenticated executives evidence-backed analysis over private, curated retail data. It uses approved Golden methodology during normal analysis, applies user brand scope before aggregation, and keeps destructive report operations separate from model decisions. The application runs in a regional Google Cloud deployment. All values below are starting engineering assumptions for sizing and review, not client commitments or measurements.
@@ -209,6 +211,8 @@ Release only after independent numerical references cover joins/grain, mixed-bra
 Executive UX study: recruit representative executives only with client approval, run neutral tasks for a simple question, follow-up/period change, report with actions, deletion preview/cancel/confirm, and one safe failure. Capture task completion without moderator rescue, clarification count, elapsed time to useful answer, target understanding (metric/date/scope/completeness), and deletion target understanding. Do not infer satisfaction without asking participants. No human participants or task time were observed in this prototype phase. See [evaluation methodology and UX limits](TECHNICAL_DESIGN.md#7-evaluation-method-and-verification-limits).
 
 ## 9. Prototype substitutions and material limits
+
+The local prototype now includes deterministic report/conversation navigation and an in-process shortcut for a successfully displayed deletion proposal. Report reads and deletion-preview titles recheck current catalog scope and saved semantic support before disclosure; this is a bounded catalog dependency, with no new business analysis or model calls. The shortcut delegates to the persisted explicit-token transaction and cannot survive a process restart. These are SQLite/CLI contracts, not the production JWT/API/PostgreSQL/outbox services described above. See the Part 3 contracts in TECHNICAL_DESIGN.md.
 
 The current prototype is one local process with Typer/Rich, LangGraph, a direct Gemini adapter and authorized OpenRouter Gemini fallback, a trusted Python/SQLGlot compiler, read-only public BigQuery access, SQLite, local authored Golden JSON, local sanitized JSONL diagnostics and seeded `--user` identity. It has no production frontend, verified JWT, Data Access Service, Cloud Run deployment, private curated warehouse, Cloud SQL, GCS, PostgreSQL vector index, approval worker, managed telemetry, persona UI, preference persistence or chart/email/web tools. Prototype deletion retains bytes in SQLite; local trace durability is best effort. The demo identity is not authentication. The matched live Golden run selected a method the model already proposed; only the held-out offline baseline comparison demonstrates causal method change. See the [technical explanation](TECHNICAL_DESIGN.md) and [setup and limitations](README.md#definitions-and-limits).
 

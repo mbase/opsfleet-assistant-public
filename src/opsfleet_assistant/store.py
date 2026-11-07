@@ -16,6 +16,7 @@ from .contracts import AnalysisPlan, CohortOrigin
 from .conversation import ConversationContext
 from .report_artifact import ReportArtifact, artifact_binding_digest, validate_artifact
 from .reporting import GroundedReport, ReportComposition
+from .navigation import NavigationFailure
 from .identity import PolicyError
 from pydantic import ValidationError
 
@@ -67,6 +68,8 @@ class SQLiteStore:
                   state TEXT NOT NULL CHECK(state IN ('pending','consumed','cancelled','expired','stale'))
                 );
             """)
+            self.db.execute("CREATE TABLE IF NOT EXISTS navigation_cursors (token TEXT PRIMARY KEY, owner TEXT NOT NULL, "
+                            "operation TEXT NOT NULL, page_limit INTEGER NOT NULL, position TEXT NOT NULL, expires_at TEXT NOT NULL)")
             existing_columns = {row[1] for row in self.db.execute("PRAGMA table_info(reports)")}
             for column in ("request_digest", "identity_digest", "plans_json", "scope_digest", "grounded_report_json", "report_completeness", "report_composition_json", "report_support_json", "report_binding_digest"):
                 if column not in existing_columns:
@@ -77,8 +80,9 @@ class SQLiteStore:
             conversation_columns = {row[1] for row in self.db.execute("PRAGMA table_info(conversations)")}
             if "continuity_json" not in conversation_columns:
                 self.db.execute("ALTER TABLE conversations ADD COLUMN continuity_json TEXT NOT NULL DEFAULT ''")
-            if self.db.execute("PRAGMA user_version").fetchone()[0] < 4:
-                self.db.execute("PRAGMA user_version=4")
+            if self.db.execute("PRAGMA user_version").fetchone()[0] < 5:
+                self.db.execute("PRAGMA user_version=5")
+            self.db.execute("CREATE INDEX IF NOT EXISTS reports_navigation ON reports(owner,deleted_at,id)")
             self.db.execute("CREATE INDEX IF NOT EXISTS reports_active_owner ON reports(owner,deleted_at,conversation_id)")
         except (OSError, sqlite3.Error) as exc:
             raise StoreFailure("store_unavailable") from None
@@ -270,9 +274,69 @@ class SQLiteStore:
 
     def report(self, owner: str, report_id: int) -> dict[str, Any] | None:
         try:
-            self.db.row_factory = sqlite3.Row
-            row = self.db.execute("SELECT * FROM reports WHERE owner=? AND id=? AND deleted_at IS NULL", (owner, report_id)).fetchone()
-            return dict(row) if row else None
+            cursor = self.db.execute("SELECT * FROM reports WHERE owner=? AND id=? AND deleted_at IS NULL", (owner, report_id))
+            row = cursor.fetchone()
+            return dict(zip((c[0] for c in cursor.description), row)) if row else None
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def navigation_cursor(self, owner: str, operation: str, limit: int, position: str) -> str:
+        try:
+            token = secrets.token_urlsafe(24)
+            self.db.execute("INSERT INTO navigation_cursors VALUES(?,?,?,?,?,?)", (token, owner, operation, limit,
+                str(position), (self._now() + timedelta(hours=24)).isoformat()))
+            return token
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def read_navigation_cursor(self, owner: str, operation: str, limit: int, token: str) -> str | None:
+        try:
+            row = self.db.execute("SELECT position,expires_at FROM navigation_cursors WHERE token=? AND owner=? "
+                "AND operation=? AND page_limit=?", (token, owner, operation, limit)).fetchone()
+            return row[0] if row and self._now() < datetime.fromisoformat(row[1]) else None
+        except (sqlite3.Error, ValueError):
+            raise StoreFailure("store_unavailable") from None
+
+    def report_candidates(self, owner: str, *, before: int, limit: int) -> list[dict[str, Any]]:
+        """Bounded keyset window; never constructs titles before disclosure."""
+        if not 1 <= limit <= 51 or before < 1:
+            raise StoreFailure("invalid_page")
+        try:
+            cursor = self.db.execute("SELECT * FROM reports WHERE owner=? AND deleted_at IS NULL AND id<? "
+                                     "ORDER BY id DESC LIMIT ?", (owner, before, limit))
+            names = tuple(c[0] for c in cursor.description)
+            return [dict(zip(names, row)) for row in cursor.fetchall()]
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def conversation_metadata(self, owner: str, *, after: str = "", limit: int = 21) -> list[dict[str, Any]]:
+        if not 1 <= limit <= 51:
+            raise StoreFailure("invalid_page")
+        try:
+            cursor = self.db.execute("SELECT conversation_id,updated_at,continuity_json FROM conversations "
+                "WHERE owner=? AND conversation_id>? ORDER BY conversation_id LIMIT ?", (owner, after, limit))
+            return [dict(zip(("conversation_id", "updated_at", "continuity_json"), row)) for row in cursor.fetchall()]
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def conversation_payload(self, owner: str, conversation_id: str) -> str | None:
+        try:
+            row = self.db.execute("SELECT continuity_json FROM conversations WHERE owner=? AND conversation_id=?",
+                                  (owner, conversation_id)).fetchone()
+            return row[0] if row else None
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def conversation_exists(self, owner: str, conversation_id: str) -> bool:
+        try:
+            return self.db.execute("SELECT 1 FROM conversations WHERE owner=? AND conversation_id=?",
+                                   (owner, conversation_id)).fetchone() is not None
+        except sqlite3.Error:
+            raise StoreFailure("store_unavailable") from None
+
+    def create_conversation(self, owner: str, conversation_id: str) -> None:
+        try:
+            self.db.execute("INSERT INTO conversations(owner,conversation_id) VALUES(?,?)", (owner, conversation_id))
         except sqlite3.Error:
             raise StoreFailure("store_unavailable") from None
 
@@ -298,7 +362,7 @@ class SQLiteStore:
         return datetime.now(timezone.utc)
 
     def preview_deletion(self, owner: str, selector: str, value: str,
-                         *, conversation_id: str | None = None) -> dict[str, Any]:
+                         *, conversation_id: str | None = None, disclosure_check=None) -> dict[str, Any]:
         """Persist an exact active target set before returning its single-use token."""
         if selector not in {"literal", "conversation"} or not value or len(value) > 200:
             raise StoreFailure("invalid_selector")
@@ -320,6 +384,13 @@ class SQLiteStore:
                 rows = [row for row in candidates if value.casefold() in row[2].casefold()]
             if len(rows) > 100:
                 raise StoreFailure("selection_too_broad")
+            if rows and disclosure_check is not None:
+                ids = [row[0] for row in rows]
+                placeholders = ",".join("?" for _ in ids)
+                cursor = self.db.execute(f"SELECT * FROM reports WHERE owner=? AND id IN ({placeholders})",
+                                         (owner, *ids))
+                names = tuple(c[0] for c in cursor.description)
+                disclosure_check(owner, [dict(zip(names, row)) for row in cursor.fetchall()])
             targets = [{"id": int(row[0]), "version": int(row[1]),
                         "title": self._title(row[2])} for row in rows]
             if not targets:
@@ -337,9 +408,9 @@ class SQLiteStore:
             )
             self.db.execute("COMMIT")
             return {"targets": targets, "token": token, "expires_at": expires.isoformat()}
-        except (sqlite3.Error, StoreFailure) as exc:
+        except (sqlite3.Error, StoreFailure, NavigationFailure, ValueError, TypeError, AttributeError) as exc:
             self._rollback()
-            if isinstance(exc, StoreFailure):
+            if isinstance(exc, (StoreFailure, NavigationFailure)):
                 raise
             raise StoreFailure("store_unavailable") from None
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 
@@ -41,3 +41,20 @@ def parse_deletion(question: str) -> DeletionCommand | None:
     if re.match(r"^confirm\b", stripped, re.I):
         return DeletionCommand("ambiguous")
     return None
+
+
+@dataclass(frozen=True)
+class DeletionTarget:
+    id: int
+    version: int
+    title: str
+
+
+@dataclass(frozen=True)
+class DeletionPreview:
+    """Internal capability-bearing payload; never logged or persisted as prose."""
+    owner: str
+    conversation_id: str
+    token: str = field(repr=False)
+    expires_at: str
+    targets: tuple[DeletionTarget, ...]

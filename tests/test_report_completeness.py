@@ -367,7 +367,7 @@ def test_additive_migration_keeps_legacy_content_and_pending_proposal(harness):
     current = SQLiteStore(path, clock=lambda: NOW)
     old = current.report(OWNER, rid)
     assert old["content"] == "Original legacy content" and old["report_completeness"] == "legacy"
-    assert old["report_composition_json"] == "" and current.db.execute("PRAGMA user_version").fetchone()[0] == 4
+    assert old["report_composition_json"] == "" and current.db.execute("PRAGMA user_version").fetchone()[0] == 5
     assert current.resolve_deletion(OWNER, proposal["token"]) == ("deleted", [rid])
     current.close()
 

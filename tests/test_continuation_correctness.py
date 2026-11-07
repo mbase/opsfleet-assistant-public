@@ -477,7 +477,8 @@ def test_equivalent_pending_choices_complete_with_baseline(harness, purpose, var
         context = current.load_continuity(OWNER, "equivalent")
         assert context.expires_at == prior.expires_at and context.snapshot.request.spec.queries == (a, paired)
         for plan, query in zip(context.snapshot.plans, (a, paired)):
-            assert plan.model_dump(exclude={"period", "cutoff_date", "version"}) == query.model_dump(exclude={"temporal_role"})
+            assert plan.playbook is None and plan.baseline_cutoff_date is None
+            assert plan.model_dump(exclude={"period", "cutoff_date", "version", "playbook", "baseline_cutoff_date"}) == query.model_dump(exclude={"temporal_role"})
         # Saved replay and re-grounded reuse must support the equivalent pair too.
         script["Explain equivalent pair"] = I(status="ready", context_action="continue", request=R(intent="explain"))
         explained = using(flow, current).run(OWNER, "Explain equivalent pair", conversation_id="equivalent")

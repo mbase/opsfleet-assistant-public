@@ -100,6 +100,14 @@ def resolve_interpretation(result: InterpretationResult, *, reference_date: date
                            ) -> tuple[InterpretationResult, ResolvedRequest | None]:
     if result.status != "ready" or result.request.intent != "analysis":
         return result, None
+    if result.request.playbook and result.request.playbook.id == "product_revenue" and (
+            not result.request.queries or not result.request.queries[0].product_ids
+            or len(result.request.queries[0].product_ids) != 2):
+        return result.model_copy(update={"status": "needs_clarification", "issues": (InterpretationIssue.MISSING_PRODUCTS,)}), None
+    if result.request.playbook and result.request.playbook.id == "regional_spend" and (
+            result.request.playbook.population != "qualifying_purchasers" or not result.request.queries
+            or not result.request.queries[0].demographic_values):
+        return result.model_copy(update={"status": "needs_clarification", "issues": (InterpretationIssue.UNRESOLVED,)}), None
     if not result.request.queries:
         return result.model_copy(update={"status": "needs_clarification",
                                          "issues": (InterpretationIssue.MISSING_METRIC,)}), None
@@ -112,7 +120,7 @@ def resolve_interpretation(result: InterpretationResult, *, reference_date: date
                                    role_anchors=role_anchors)
     except ResolutionFailure as exc:
         return result.model_copy(update={"status": "needs_clarification", "issues": (exc.issue,)}), None
-    if result.request.mode == Mode.REPORT:
+    if result.request.mode == Mode.REPORT and not (result.request.playbook and result.request.playbook.id == "churn_change"):
         roles = [q.temporal_role for q in result.request.queries]
         if (resolved.comparison is not None and roles != ["analysis", "comparison"]
                 or "comparison" in roles and resolved.comparison is None):
@@ -129,6 +137,9 @@ def analytical_plans(request: ResolvedRequest, *,
     retains its existing separately bound cutoff comparison.
     """
     spec = request.spec
+    if spec.playbook is not None:
+        from .playbooks import validate_request
+        validate_request(request)
     plans = []
     try:
         for query in spec.queries:
@@ -136,7 +147,15 @@ def analytical_plans(request: ResolvedRequest, *,
             if period is None:
                 raise PolicyError("plan_period_mismatch")
             data = query.model_dump(exclude={"temporal_role"})
-            if query.operation == Operation.CHURN_SNAPSHOT:
+            data["playbook"] = spec.playbook
+            if spec.playbook:
+                data["version"] = 2
+            if query.operation == Operation.CHURN_CHANGE:
+                if request.comparison is None:
+                    raise PolicyError("plan_period_mismatch")
+                data["cutoff_date"] = request.analysis.end
+                data["baseline_cutoff_date"] = request.comparison.end
+            elif query.operation == Operation.CHURN_SNAPSHOT:
                 data["cutoff_date"] = period.end
             else:
                 data["period"] = period
@@ -157,6 +176,9 @@ def analytical_plans(request: ResolvedRequest, *,
         left, right = plans
         if (left.requested_brands != right.requested_brands or left.product_ids != right.product_ids
                 or left.revenue_statuses != right.revenue_statuses or left.inactivity_days != right.inactivity_days):
+            raise PolicyError("plan_intent_mismatch")
+    elif spec.playbook and spec.playbook.id == "churn_change":
+        if len(plans) != 1 or spec.queries[0].temporal_role != "analysis":
             raise PolicyError("plan_intent_mismatch")
     elif spec.mode == Mode.TEMPORAL_COMPARE or spec.mode == Mode.REPORT and request.comparison is not None:
         # Pair compatibility concerns populations/definitions, while each plan's
@@ -189,6 +211,10 @@ def validate_bound_plans(plans: tuple[AnalysisPlan, ...], request: ResolvedReque
     if len(plans) != len(expected):
         raise PolicyError("plan_intent_mismatch")
     for actual, original in zip(plans, expected):
+        if actual.baseline_cutoff_date != original.baseline_cutoff_date:
+            raise PolicyError("plan_period_mismatch")
+        if actual.playbook != original.playbook:
+            raise PolicyError("plan_intent_mismatch")
         if actual.period != original.period or actual.cutoff_date != original.cutoff_date:
             raise PolicyError("plan_period_mismatch")
         if actual.metric != original.metric or actual.inactivity_days != original.inactivity_days:

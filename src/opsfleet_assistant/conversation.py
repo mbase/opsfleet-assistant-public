@@ -30,6 +30,11 @@ def request_binding_digest(request: ResolvedRequest, plans: tuple[AnalysisPlan, 
                "previous_cutoff": previous_cutoff.isoformat() if previous_cutoff else None}
     if role_anchors:
         payload["role_anchors"] = {role: anchor.model_dump(mode="json") for role, anchor in role_anchors.items()}
+    if request.spec.playbook is None:
+        payload["request"]["spec"].pop("playbook", None)
+        for plan in payload["plans"]:
+            plan.pop("playbook", None)
+            plan.pop("baseline_cutoff_date", None)
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -75,7 +80,7 @@ def request_role_anchors(spec: RequestSpec, *, previous_spec: RequestSpec | None
 
 
 class AnalysisSnapshot(StrictModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[2, 3] = 2
     created_at: datetime
     plans: tuple[AnalysisPlan, ...] = Field(min_length=1, max_length=2)
     evidence: tuple[Evidence, ...] = Field(min_length=1, max_length=2)
@@ -104,7 +109,7 @@ class AnalysisSnapshot(StrictModel):
                 role_anchors: dict[str, TemporalAnchor] | None = None, **values):
         period = previous_plan.period if previous_plan else None
         cutoff = previous_plan.cutoff_date if previous_plan else None
-        return cls(**values, resolution_reference_date=reference_date,
+        return cls(schema_version=3 if values["request"].spec.playbook else 2, **values, resolution_reference_date=reference_date,
                    resolution_previous_period=period, resolution_previous_cutoff=cutoff,
                    resolution_role_anchors=role_anchors or {},
                    request_binding_digest=request_binding_digest(values["request"], values["plans"],
@@ -112,6 +117,8 @@ class AnalysisSnapshot(StrictModel):
 
     @model_validator(mode="after")
     def bounded(self):
+        if (self.request.spec.playbook is not None) != (self.schema_version == 3):
+            raise ValueError("invalid_snapshot_version")
         if (self.created_at.tzinfo is None or len(self.plans) != len(self.evidence)
                 or any(p.limit > 20 or (p.operation == "demographic_comparison" and p.limit > 10)
                        or len(e.rows) > min(p.limit, 10 if p.operation == "demographic_comparison" else 20)

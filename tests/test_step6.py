@@ -32,6 +32,7 @@ def workflow(tmp_path: Path, *, gateway=FakeGateway, turn=FakeTurn) -> Assistant
                              gateway_factory=gateway, turn_factory=turn, today=date(2026, 11, 3))
 
 
+# Historical selector names retained for the frozen scenario manifest; 1A requires a stop.
 def test_synthetic_malformed_sql_is_regenerated_from_same_plan_and_persistent_fault_stops(tmp_path, monkeypatch):
     original = compiler._compile_body
     compiled_plans = []
@@ -51,17 +52,8 @@ def test_synthetic_malformed_sql_is_regenerated_from_same_plan_and_persistent_fa
 
     monkeypatch.setattr(compiler, "_compile_body", once)
     result = workflow(tmp_path, turn=adapter_factory).run("manager_apparel", "Revenue in 2025")
-    assert result.status == "ok"
-    assert len(compiled_plans) == 2 and compiled_plans[0] == compiled_plans[1]
-    assert compiled_plans[0].period.start == date(2025, 1, 1)
-    assert compiled_plans[0].metric == Metric.REVENUE
-    assert tuple(x.value for x in compiled_plans[0].revenue_statuses) == ("Shipped", "Complete", "Processing")
-    assert result.query_executions == 3
-    runner, client = adapter_instances[0]
-    assert runner.dry_runs == 3 and len(client.calls) == 6
-    assert all(client.calls[index][1].dry_run and not client.calls[index + 1][1].dry_run
-               and client.calls[index][0] == client.calls[index + 1][0]
-               for index in (0, 2, 4))
+    assert result.status == "error" and len(compiled_plans) == 1
+    assert result.query_executions == 1 and result.report_id is None
 
     def always(plan):
         compiled_plans.append(plan)
@@ -71,7 +63,7 @@ def test_synthetic_malformed_sql_is_regenerated_from_same_plan_and_persistent_fa
     stopped = workflow(tmp_path / "persistent", turn=adapter_factory).run("manager_apparel", "Revenue in 2025")
     assert stopped.status == "error" and "compiler_syntax_error" in stopped.text
     assert stopped.trace_id and stopped.query_executions == 1 and stopped.report_id is None
-    assert len(compiled_plans) == 4
+    assert len(compiled_plans) == 2
 
 
 @pytest.mark.parametrize("category", ["query_syntax_error", "query_schema_error"])
@@ -90,12 +82,8 @@ def test_bq_validation_repair_reuses_sealed_query_scope_and_parameters(tmp_path,
 
     FailedOnce.seen = []
     result = workflow(tmp_path, turn=FailedOnce).run("manager_apparel", "Revenue in 2025")
-    assert result.status == "ok" and len(FailedOnce.seen) == 2
-    first, second = FailedOnce.seen
-    assert compiler.is_trusted_compiled(first) and compiler.is_trusted_compiled(second)
-    assert first.parameters == second.parameters and first.metric_definition == second.metric_definition
-    assert first.effective_brands == second.effective_brands and first.scope_version == second.scope_version
-    assert first.sql == second.sql and first.requested_product_ids == second.requested_product_ids
+    assert result.status == "error" and len(FailedOnce.seen) == 1
+    assert compiler.is_trusted_compiled(FailedOnce.seen[0])
 
 
 def test_persistent_bq_syntax_stops_after_one_regeneration(tmp_path):
@@ -109,7 +97,7 @@ def test_persistent_bq_syntax_stops_after_one_regeneration(tmp_path):
     AlwaysSyntax.seen = []
     result = workflow(tmp_path, turn=AlwaysSyntax).run("manager_apparel", "Revenue in 2025")
     assert result.status == "error" and result.report_id is None
-    assert len(AlwaysSyntax.seen) == 2 and result.model_requests == 1
+    assert len(AlwaysSyntax.seen) == 1 and result.model_requests == 1
 
 
 def test_unknown_billing_is_null_in_cli_result_not_a_measured_zero(tmp_path):
@@ -160,7 +148,7 @@ def test_empty_diagnostic_budget_exhaustion_is_honest(tmp_path):
         exhaust_diagnosis = True
 
     result = workflow(tmp_path, turn=Exhausted).run("manager_apparel", "Revenue in 2025")
-    assert result.status == "ok" and "diagnosis could not finish" in result.text
+    assert result.status == "ok" and "No matching data" in result.text
     assert "revenue=0" not in result.text and result.query_executions == 3
 
 

@@ -367,7 +367,7 @@ def test_additive_legacy_schema_preserves_report_and_deletion(harness, tmp_path)
     db.executescript("CREATE TABLE conversations(owner TEXT,conversation_id TEXT,plan_json TEXT,cohort_origin TEXT,scope_version INTEGER,updated_at TEXT,PRIMARY KEY(owner,conversation_id));")
     db.close()
     old = SQLiteStore(path)
-    assert old.db.execute("PRAGMA user_version").fetchone()[0] == 4
+    assert old.db.execute("PRAGMA user_version").fetchone()[0] == 5
     report_id = old.save_report(owner=OWNER, conversation_id="legacy", turn_id="original", content="Legacy retained report",
         metric_definitions=[], scope_reference="demo:" + OWNER, scope_version=1, evidence_refs=[])
     proposal = old.preview_deletion(OWNER, "conversation", "legacy")

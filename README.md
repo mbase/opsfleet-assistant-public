@@ -110,3 +110,76 @@ The two JSON files in `docs/remediation/` support the retained regression/evalua
 - Supported operations are bounded. General cross-period demographic/time-series comparisons, arbitrary SQL and complete prevention of repeated demographic differencing are absent.
 - OpenRouter Gemini shares the model family and is not independent provider redundancy. Optional Presidio runtime remains unverified. Sanitized JSONL telemetry is best effort, not a durable audit log; `opsfleet metrics` derives local counters.
 - Persistent preference learning, a production Golden pipeline, nondeveloper persona administration and chart/email/web tools are [production designs](HLD.md), not implemented prototype features.
+
+Recovery increments 1A–1B: only classified transient dry-run failures before submission receive a bounded retry. Submitted or ambiguous jobs are never automatically replayed; unknown billing remains unknown. A pre-submission schema rejection permits one metadata inspection cycle (at most four table requests) and a correction only through a reviewed compatible source binding. Production ships only the public v1 binding; unknown schemas and persistent syntax defects stop with correction unavailable. Empty populations keep the original filters. A synthetic approved migration demonstrates correction offline; no live schema migration or general SQL syntax self-correction is claimed.
+
+Part 1 review revisions preserve separate failing-diagnostic and completed-analysis provenance in JSON; `--verbose` shows safe stage, submission, job reference and known/unknown billing. Submitted/uncertain timeout guidance asks you to inspect job status before another submission. SDK page requests share the remaining job/turn deadline, and recovery success counts once per turn only after validated evidence. The latest Part 1 re-review recommends accepting both recovery increments within their agreed scope.
+
+The latest Part 1 revisions also preserve known analysis job provenance after unexpected validation failures and allow unaffected queries to reuse an inspected binding without claiming another correction. The Part 2 instruction authorizes analytical playbooks from that reviewed baseline; implementation awaits review.
+
+## Bounded analytical investigations (Part 2)
+
+Part 2 implements three version-1 playbooks, awaiting review:
+
+- **Product revenue:** “Investigate why product 101 revenue differs from product 202 in Q1 2025.” IDs are illustrative: both must exist in the authorized catalog. Compares the first product minus the second and measures qualifying item-volume and average-item-price components. Higher volume can offset lower price; no currency or business cause is inferred.
+- **Regional purchaser spend:** “Investigate the spend-per-purchaser difference between Texas and California in Q1 2025.” State only; denominator is qualifying purchasers, with distinct orders containing scoped qualifying items. All registered users are unsupported and require clarification. Separates order frequency/order value from revenue and population-size differences.
+- **Inactivity churn change:** “Did 90-day inactivity churn rise at the April 1, 2025 cutoff versus January 1, 2025? Investigate country components.” Reports both eligible/inactive populations, rates and percentage-point change; rejects flat/falling spike premises. Country definitions are fixed within one query, including tagged unknown values. These are population snapshots, not newly churned membership or causal retention effects.
+
+Each normal path uses catalog + analysis + coverage = **three warehouse executions**. Existing recovery/deadline/byte ceilings stay unchanged. Actions are proposals tied to a checked component, with an observed trigger and measure to check. Provider drafting failure retains checked components and deterministic proposals.
+
+Regional cohorts below five purchasers are withheld without complementary counts or invented zeros. Churn releases all aligned countries together (at most nine), only when every country's inactive and active cells at both cutoffs have at least five purchasers. Otherwise it omits the entire country breakdown; safe headline-only results remain partial. If headline cells are unsafe, nothing is released. This is conservative bounded release, not a general repeated-query privacy system.
+
+Reports persist unrounded released operands, signed contributions, method version, residual/tolerance, choices and proposals. Exact save preserves those findings and original timing. Changed playbook/population/segment/period/product/status/report choices cannot save old evidence. New artifact v2 / snapshot v3 / grounded-report v3 readers coexist with ordinary artifact v1 / snapshot v2 / grounded-report v1 (valid playbook grounded-report v2 selections also remain readable); old content is never assigned a new method. Continuity still expires after 30 minutes.
+
+Run the reproducible synthetic demonstration (test dependencies required):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src OPSFLEET_LIVE_TESTS=0 .venv/bin/python scripts/part2_offline_cli_demo.py
+```
+
+It invokes the real CLI/workflow/compiler/adapter using injected interpretation and independently populated SQLite source rows, disposable report storage, network blocking and isolated telemetry. Expected and actual components, partial cases, and save/restart replay checks are printed. This does not verify real-model interpretation or BigQuery dialect/type behavior. See [Part 2 implementation report](docs/PART_2_IMPLEMENTATION_REPORT.md) for the acceptance matrix, formulas, budgets and current verification results. No live calls or deployment are included.
+
+Part 2 review revisions (R1–R4) await re-review. Churn change headlines must compare the overall current cutoff with the overall earlier cutoff; country temporal findings must match countries and identify them. New product/state comparisons follow the requested ordered pair. Missing durable support cannot downgrade a playbook report to legacy. Fully withheld output says “No safely releasable observations; absent or withheld,” without claiming source absence or counting a recovered observation. Valid saved v2 selections retain their original explicit operands/text; new v3 reports use corrected defaults and labels. Invalid saved churn references fail closed. Part 3 remains on hold pending re-review and owner acceptance.
+
+## Saved work navigation (Part 3)
+
+```sh
+opsfleet reports --user manager_apparel --limit 5 --db PATH_TO_DISPOSABLE_SQLITE --json
+opsfleet reports --user manager_apparel --limit 5 --cursor CURSOR_FROM_PREVIOUS_PAGE --db PATH_TO_DISPOSABLE_SQLITE --json
+opsfleet report REPORT_ID --user manager_apparel --db PATH_TO_DISPOSABLE_SQLITE --json
+opsfleet conversations --user manager_apparel --limit 5 --db PATH_TO_DISPOSABLE_SQLITE --json
+opsfleet chat --user manager_apparel --conversation CONVERSATION_ID --db PATH_TO_DISPOSABLE_SQLITE
+```
+
+In human chat, `/help` lists capabilities and these exact commands:
+
+```text
+/reports [--limit N] [--cursor CURSOR]
+/report REPORT_ID
+/conversations [--limit N] [--cursor CURSOR]
+/resume CONVERSATION_ID
+/new
+/schema
+/help
+/exit or /quit
+```
+
+Limits are 1–50, default 20. Repeat the same limit with a returned cursor. Report pages scan at most N candidates plus one lookahead, ordered by descending ID. Conversation pages use ascending ID. Pages may be sparse or empty with a continuation; keep following the cursor. No hidden counts or inaccessible IDs are returned. Cursors are opaque, scoped to owner/operation/limit, expire after 24 hours, and require the same SQLite database. Insertions before the current position appear on a new traversal; deletions are skipped. Pages are a moving view rather than a frozen library snapshot.
+
+Every report command rechecks current trusted demo identity and the entire saved execution scope, with at most one bounded current product catalog execution. It validates saved evidence, supported versions, bindings, findings, drivers, composition and exact agreement of saved text with its trusted rendering contract before disclosing titles or content. A recomputed checksum cannot bless independently changed report text. Supported pre-contract formats are checked against the original support and returned unchanged; unsupported formats remain unavailable. Revoked, corrupt, unsupported, deleted and other-owner reports are unavailable. Catalog failure is `access_check_unavailable`, never an empty library. Genuine old ordinary reports need enough saved plan/scope metadata; their original text can be read with `legacy` completeness and unknown analytical details. Missing support never downgrades a playbook into that reader.
+
+Navigation uses zero model requests and zero fresh business-analysis queries. Help/schema and conversation metadata/selection use zero warehouse calls. A catalog lookup authorizes disclosure of a historical snapshot; it does not update its figures or prose. Report reads preserve exact original text, numerical precision, analytical period, evidence as-of and completeness. Browsing does not inject evidence into the active conversation or extend its 30-minute continuity lifetime. Expired or incompatible context requires fresh analysis before an unchanged save. Resuming valid context preserves its original date anchors and rechecks current authorization on analytical reuse.
+
+`/new` immediately persists an empty fresh conversation and selects it. Previous work remains. `/resume` and `chat --conversation` select only an existing owned ID; blank/arbitrary/other-owner IDs fail safely. Failed interactive selection leaves the previous conversation active. Conversation listings disclose IDs, update times and continuity availability, without message/report text.
+
+Human chat supports bare `confirm` or `cancel` immediately after a deletion preview has successfully displayed. It resolves that exact persisted proposal through the explicit-token operation. A new preview, any other input (including help, invalid commands or failed resume), conversation change, error, expiry, completion, EOF/interrupt or restart clears the local shortcut. Clearing it does not cancel a persisted proposal. “Yes” and model output cannot approve deletion. Another terminal's proposal cannot replace the displayed one. Preview titles now use the same current disclosure gate as browsing; an unverifiable matched set fails before titles, counts or tokens are shown. Explicit confirmation still uses original IDs/versions atomically, with no reselection or catalog/business query.
+
+Scripts, `ask`, and `chat --json` require explicit `confirm TOKEN` / `cancel TOKEN`. JSON previews retain usable commands in `text` and add `deletion_preview` with typed targets, expiry and the intended token; protect these capability values. Navigation responses contain `operation`, safe `status`, `items`, `content`, `active_conversation`, `next_cursor`, `message`, and model/query/business-query counters. JSON chat emits one object per result with no prompts/banner; exit/EOF terminates without a result. Errors preserve machine-readable status. With `--json`, malformed arguments, missing operands/identity and unknown flags/commands emit one sanitized `invalid_command` envelope and exit 2 before dependencies open; non-JSON usage errors retain standard help/stderr behavior. `--verbose` never changes JSON precision. Store-open errors also produce JSON when requested.
+
+Run the isolated evaluator journey without credentials or live calls:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src OPSFLEET_LIVE_TESTS=0 .venv/bin/python scripts/part3_offline_cli_demo.py
+```
+
+It saves, recreates CLI/store instances, lists/reads, resumes/saves, checks expiry/revocation/unavailable catalog/corruption, then cancels and confirms in human chat. Output redacts capability values. Part 3 is implemented and awaiting review; Part 2 independent re-review remains pending. See [Part 3 implementation evidence](docs/PART_3_IMPLEMENTATION_REPORT.md).

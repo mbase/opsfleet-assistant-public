@@ -196,11 +196,25 @@ def test_deletion_clarification_and_confirmation_remain_recognizable(tmp_path):
     try:
         store.save_report(owner="manager_apparel", conversation_id="c", turn_id="t", content="Synthetic scope report",
                           metric_definitions=[], scope_reference="demo:manager_apparel", scope_version=1, evidence_refs=[])
+        # Legacy preview needs enough saved plan metadata for current disclosure.
+        # This fixture uses trusted compilation, with no model/business query.
+        from opsfleet_assistant.bigquery_adapter import QueryLimits
+        from opsfleet_assistant.periods import resolve_request
+        from opsfleet_assistant.intent import analytical_plans
+        from opsfleet_assistant.identity import resolve_demo_scope
+        from opsfleet_assistant.compiler import compile_plan
+        from opsfleet_assistant.workflow import _scope_digest
+        turn = FakeTurn(SETTINGS, limits=QueryLimits())
+        catalog = turn.load_catalog()
+        plans = analytical_plans(resolve_request(ready(QuerySpec(operation="aggregate",metric="revenue")).request,
+            reference_date=date(2026,11,4),analytical_timezone="UTC"))
+        queries = tuple(compile_plan(p,resolve_demo_scope("manager_apparel",catalog),catalog) for p in plans)
+        store.db.execute("UPDATE reports SET plans_json=?,scope_digest=?",(json.dumps([p.model_dump(mode="json") for p in plans]),_scope_digest(queries)))
         clarification = runner.run("manager_apparel", "Delete all the reports we made in this conversation")
         preview = runner.run("manager_apparel", "Delete all reports mentioning Synthetic scope report")
         assert clarification.status == "clarification" and preview.status == "confirmation_required"
         assert clarification.model_requests == preview.model_requests == 0
-        assert clarification.query_executions == preview.query_executions == 0 and not warehouse.queries
+        assert clarification.query_executions == 0 and preview.query_executions == 1 and not warehouse.queries
         events = [json.loads(line) for line in (tmp_path / "workflow-events.jsonl").read_text().splitlines()]
         assert [(event["status"], event["category"]) for event in events if event["event"] == "final_outcome"] == [
             ("clarification", "clarification"), ("confirmation_required", "confirmation_required")]

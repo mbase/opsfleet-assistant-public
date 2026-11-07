@@ -25,6 +25,8 @@ def copied_workspace(tmp_path):
         target = tmp_path/relative
         target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(ROOT/relative,target)
+    from source_fixture import freeze_copied_source
+    freeze_copied_source(tmp_path)
     (tmp_path/'docs/remediation/runs').mkdir(exist_ok=True)
     (tmp_path/'runtime').mkdir()
     (tmp_path/'runtime/sentinel').write_text('unchanged')

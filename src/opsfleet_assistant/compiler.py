@@ -20,6 +20,7 @@ from sqlglot import exp
 from .contracts import AnalysisContext, AnalysisPlan, Dimension, Metric, Operation, BrandScope
 from .identity import Catalog, PolicyError, authorize_products, effective_brands
 from .metrics import MIN_DEMOGRAPHIC_CUSTOMERS, effective_definition
+from .source_schema import PUBLIC_BINDING, SourceBinding, bind_sql
 from .privacy import FIELD_POLICY_VERSION, ResultContract, validate_source_fields
 
 
@@ -75,6 +76,10 @@ class CompiledQuery:
     scope_version: int
     requested_product_ids: tuple[int, ...] | None
     requested_demographic_values: tuple[str, ...] | None
+    semantic_plan: str = ""
+    temporal_role: str = "analysis"
+    source_binding_version: str = "public_v1"
+    compiler_version: int = 1
     _seal: str = field(default="", repr=False, compare=False)
 
     def parameter(self, name: str) -> BoundParameter:
@@ -87,6 +92,7 @@ def _signature(query: CompiledQuery) -> str:
         query.metric_definition, query.field_policy_version, query.operation,
         query.scope_user_id, query.scope_role, query.scope_version,
         query.requested_product_ids, query.requested_demographic_values,
+        query.source_binding_version, query.compiler_version, query.semantic_plan, query.temporal_role,
     )).encode("utf-8")
     return hmac.new(_COMPILER_KEY, material, hashlib.sha256).hexdigest()
 
@@ -155,6 +161,22 @@ def _compile_body(plan: AnalysisPlan) -> tuple[str, ResultContract]:
             max_rows=2,
         )
 
+    if plan.operation == Operation.REGIONAL_SPEND:
+        query = f""", purchaser_spend AS (
+    SELECT user_id, SUM(sale_price) AS spend, COUNT(DISTINCT order_id) AS orders
+    FROM scoped_items WHERE user_id IS NOT NULL GROUP BY user_id
+)
+SELECT u.state AS demographic_value, COUNT(*) AS customers, SUM(cs.spend) AS revenue,
+       SAFE_DIVIDE(SUM(cs.spend), COUNT(*)) AS average_customer_spend,
+       SUM(cs.orders) AS order_count
+FROM purchaser_spend AS cs JOIN `{DATASET}.users` AS u ON cs.user_id = u.id
+WHERE u.state IN UNNEST(@demographic_values)
+GROUP BY u.state HAVING COUNT(*) >= @min_group_size
+ORDER BY demographic_value"""
+        return query, ResultContract(
+            ("demographic_value", "customers", "revenue", "average_customer_spend", "order_count"),
+            demographic=True, max_rows=2)
+
     if plan.operation == Operation.DEMOGRAPHIC_COMPARISON:
         dimension = plan.dimension
         assert dimension is not None
@@ -184,6 +206,49 @@ LIMIT @limit"""
             demographic=True, max_rows=plan.limit,
         )
 
+    if plan.operation == Operation.CHURN_CHANGE:
+        # Global all-or-nothing segment release. Headline is never combined with
+        # an independently selected top-N / suppressed segment subset.
+        query = f""", cutoffs AS (
+    SELECT 'current' AS cutoff_role, @cutoff_ts AS cutoff, @inactivity_threshold_ts AS threshold
+    UNION ALL SELECT 'baseline', @baseline_cutoff_ts, @baseline_threshold_ts
+), activity AS (
+    SELECT c.cutoff_role, si.user_id, MAX(si.created_at) AS last_purchase, c.threshold
+    FROM scoped_items AS si CROSS JOIN cutoffs AS c
+    WHERE si.user_id IS NOT NULL AND si.created_at < c.cutoff
+    GROUP BY c.cutoff_role, si.user_id, c.threshold
+), segments AS (
+    SELECT a.cutoff_role,
+           CASE WHEN u.country IS NULL THEN 'U:' ELSE CONCAT('C:', u.country) END AS segment_key,
+           COUNT(*) AS eligible_customers,
+           COUNTIF(a.last_purchase <= a.threshold) AS inactive_customers
+    FROM activity AS a LEFT JOIN `{DATASET}.users` AS u ON a.user_id = u.id
+    GROUP BY a.cutoff_role, segment_key
+), headlines AS (
+    SELECT cutoff_role, 'H:' AS segment_key, SUM(eligible_customers) AS eligible_customers,
+           SUM(inactive_customers) AS inactive_customers
+    FROM segments GROUP BY cutoff_role
+), headline_safe AS (
+    SELECT COUNT(*) = 2 AND MIN(inactive_customers) >= @min_group_size
+       AND MIN(eligible_customers - inactive_customers) >= @min_group_size AS safe
+    FROM headlines
+), segment_safe AS (
+    SELECT COUNT(*) <= 18 AND COUNT(*) >= 2
+       AND MIN(inactive_customers) >= @min_group_size
+       AND MIN(eligible_customers - inactive_customers) >= @min_group_size
+       AND NOT EXISTS (SELECT segment_key FROM segments GROUP BY segment_key HAVING COUNT(*) != 2) AS safe
+    FROM segments
+), released AS (
+    SELECT h.* FROM headlines AS h CROSS JOIN headline_safe AS hs WHERE hs.safe
+    UNION ALL
+    SELECT s.* FROM segments AS s CROSS JOIN headline_safe AS hs CROSS JOIN segment_safe AS ss
+    WHERE hs.safe AND ss.safe
+)
+SELECT cutoff_role, segment_key, eligible_customers, inactive_customers,
+       SAFE_DIVIDE(inactive_customers, eligible_customers) AS churn_rate
+FROM released ORDER BY segment_key, cutoff_role DESC"""
+        return query, ResultContract(("cutoff_role", "segment_key", "eligible_customers", "inactive_customers", "churn_rate"), max_rows=20)
+
     if plan.operation == Operation.CHURN_SNAPSHOT:
         query = """, customer_activity AS (
     SELECT user_id, MAX(created_at) AS last_purchase
@@ -204,8 +269,11 @@ def compile_plan(
     scope: BrandScope,
     catalog: Catalog,
     context: AnalysisContext | None = None,
+    *, binding: SourceBinding = PUBLIC_BINDING, temporal_role: str = "analysis",
 ) -> CompiledQuery:
     """Authorize scope, then compile a single read-only statement."""
+    if temporal_role not in {"analysis", "comparison"}:
+        raise PolicyError("invalid_plan_contract")
     if context is not None and context.inherited_cohort is not None:
         # No inherited-cohort SQL operator exists yet. Reject rather than
         # interpreting "their IDs" as an unscoped customer ranking.
@@ -218,7 +286,7 @@ def compile_plan(
     ]
     if plan.product_ids is not None:
         params.append(BoundParameter("product_ids", "ARRAY<INT64>", plan.product_ids))
-    churn = plan.operation == Operation.CHURN_SNAPSHOT
+    churn = plan.operation in {Operation.CHURN_SNAPSHOT, Operation.CHURN_CHANGE}
     if churn:
         assert plan.cutoff_date is not None
         cutoff = _utc_midnight(plan.cutoff_date)
@@ -232,9 +300,13 @@ def compile_plan(
             BoundParameter("start_ts", "TIMESTAMP", _utc_midnight(plan.period.start)),
             BoundParameter("end_ts", "TIMESTAMP", _utc_midnight(plan.period.end)),
         ))
+    if plan.operation == Operation.CHURN_CHANGE:
+        baseline = _utc_midnight(plan.baseline_cutoff_date)
+        params.extend((BoundParameter("baseline_cutoff_ts", "TIMESTAMP", baseline),
+                       BoundParameter("baseline_threshold_ts", "TIMESTAMP", baseline - timedelta(days=90))))
     if plan.demographic_values is not None:
         params.append(BoundParameter("demographic_values", "ARRAY<STRING>", plan.demographic_values))
-    if plan.operation == Operation.DEMOGRAPHIC_COMPARISON:
+    if plan.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE}:
         params.append(BoundParameter("min_group_size", "INT64", MIN_DEMOGRAPHIC_CUSTOMERS))
     if plan.operation in {Operation.AGGREGATE, Operation.TIME_SERIES,
                           Operation.RANK_CUSTOMERS, Operation.DEMOGRAPHIC_COMPARISON}:
@@ -243,13 +315,16 @@ def compile_plan(
     body, contract = _compile_body(plan)
     sql = f"WITH {_scoped_items(plan, churn=churn)}\n{body}"
     try:
+        sql = bind_sql(sql, binding)
         statements = sqlglot.parse(sql, read="bigquery")
+    except PolicyError:
+        raise
     except Exception as exc:
         raise PolicyError("compiler_syntax_error") from exc
     if len(statements) != 1 or not isinstance(statements[0], exp.Select):
         raise PolicyError("compiler_syntax_error")
     validate_source_fields(
-        statements[0], demographic=plan.operation == Operation.DEMOGRAPHIC_COMPARISON,
+        statements[0], demographic=plan.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE},
     )
     query = CompiledQuery(
         sql=sql,
@@ -264,5 +339,24 @@ def compile_plan(
         scope_version=scope.authorization_version,
         requested_product_ids=plan.product_ids,
         requested_demographic_values=plan.demographic_values,
+        source_binding_version=binding.version, compiler_version=binding.compiler_version,
+        semantic_plan=plan.model_dump_json(), temporal_role=temporal_role,
     )
     return replace(query, _seal=_signature(query))
+
+
+def semantic_fingerprint(query: CompiledQuery) -> str:
+    """Internal equivalence; exclude SQL, physical binding and random seals."""
+    from dataclasses import asdict
+    import json
+    material = asdict(query)
+    for key in ('sql', '_seal', 'source_binding_version', 'compiler_version'):
+        material.pop(key)
+    return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def execution_fingerprint(query: CompiledQuery) -> str:
+    """Never logged: includes SQL, parameters and binding, not random seals."""
+    canonical_sql = sqlglot.parse_one(query.sql, read="bigquery").sql(dialect="bigquery")
+    material = (canonical_sql, query.parameters)
+    return hashlib.sha256(repr(material).encode()).hexdigest()

@@ -10,15 +10,24 @@ import json
 from typing import Literal
 
 from .contracts import AnalysisPlan, ReportDraft, StrictModel
+from pydantic import model_validator
 from .conversation import AnalysisSnapshot, validate_snapshot_request
 from .evidence import Evidence
 from .identity import PolicyError
-from .reporting import GroundedReport, ReportComposition, compose_report, ground_report
+from .report_text import ReportTextContract, validate_report_text
+from .reporting import GroundedReport, ReportComposition, compose_report, ground_report, apply_report_preferences
 
 
 class ReportArtifact(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     snapshot: AnalysisSnapshot
+    rendering: ReportTextContract | None = None
+
+    @model_validator(mode="after")
+    def version(self):
+        if (self.snapshot.schema_version == 3) != (self.schema_version == 2):
+            raise ValueError("invalid_artifact_version")
+        return self
 
 
 BINDING_FIELDS = (
@@ -49,7 +58,10 @@ def reconstruct_grounded(snapshot: AnalysisSnapshot) -> GroundedReport:
         headline_index=None if refused else next((i for i, f in enumerate(old.findings) if f.text == old.headline), None),
         recommendations=tuple(a.selection for a in old.recommendations),
         hypotheses=tuple(a.selection for a in old.hypotheses))
-    return ground_report(draft, snapshot.evidence, fallback=old.selection_status == "fallback")
+    checked = ground_report(draft, snapshot.evidence, fallback=old.selection_status == "fallback", retained=old)
+    if snapshot.request.spec.mode == "report" or snapshot.request.spec.report is not None:
+        checked = apply_report_preferences(snapshot.request, checked)
+    return checked
 
 
 def validate_artifact(fields: dict, artifact: ReportArtifact, composition: ReportComposition,
@@ -77,3 +89,5 @@ def validate_artifact(fields: dict, artifact: ReportArtifact, composition: Repor
     if (composition != expected or fields["report_completeness"] != expected.completeness
             or not fields["content"].startswith(prefix)):
         raise PolicyError("invalid_result_contract")
+
+    validate_report_text(fields["content"], snapshot, artifact.rendering)

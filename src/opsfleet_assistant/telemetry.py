@@ -18,11 +18,13 @@ from .config import ROOT
 
 
 EVENTS = frozenset({
-    "turn_start", "turn_end", "stage", "policy", "golden", "model_attempt",
+    "playbook", "turn_start", "turn_end", "stage", "policy", "golden", "model_attempt",
     "model_result", "sql_validation", "bq_dry_run", "bq_job", "empty_result",
-    "recovery", "report_persistence", "deletion", "final_outcome", "prompt_budget",
+    "source_metadata", "recovery", "report_persistence", "deletion", "final_outcome", "prompt_budget",
 })
 WORDS = frozenset({
+    "unavailable", "product_revenue", "regional_spend", "churn_change", "available", "incomplete_evidence",
+    "missing_population", "incompatible_evidence", "undefined_denominator", "reconciliation_failed", "segment_unavailable",
     "start", "ok", "error", "clarification", "needs_clarification", "unsupported",
     "refusal", "confirmation_required", "deleted", "partial", "complete",
     "unknown", "known", "approved", "retired", "selected", "no_match", "outage", "excluded",
@@ -35,11 +37,13 @@ WORDS = frozenset({
     "revenue", "order_count", "average_order_value", "customer_count", "customer_spend",
     "average_customer_spend", "churn_rate", "syntax", "schema", "transient", "budget",
     "empty", "metadata", "policy", "provider", "storage", "internal", "success",
+    "inspect_schema", "recompile_supported_binding", "schema_rejection", "binding_changed",
+    "retry_before_submission", "transient_before_submission", "submission_unsafe", "retry_limit", "billing_uncertain", "correction_unavailable", "not_retryable", "exhausted", "attempted",
     "retry", "repair", "fallback", "stop", "valid_empty", "source_empty", "coverage_mismatch",
     "saved", "reused", "failed", "previewed", "cancelled", "expired", "stale",
     "no_targets", "invalid", "dry_run", "execute", "report_skipped", "diagnostic",
 })
-ENUM_KEYS = frozenset({"stage", "status", "category", "route", "purpose", "operation", "metric", "method", "decision", "usage"})
+ENUM_KEYS = frozenset({"playbook_id", "availability_reason", "action", "reason", "outcome", "stage", "status", "category", "route", "purpose", "operation", "metric", "method", "decision", "usage"})
 INT_KEYS = frozenset({"count", "bytes", "tokens", "latency_ms", "version", "estimated_bytes", "billed_bytes", "executions", "dry_runs", "requests", "prompt_chars", "instructions_chars", "context_chars",
     "previous_plan_chars", "question_chars", "feedback_chars", "messages_dropped", "protected_messages"})
 ID_KEYS = frozenset({"job_id", "trio_id"})
@@ -143,6 +147,8 @@ def agent_metrics(path: Path) -> dict[str, object]:
                 token_total += item["tokens"]
             else:
                 token_unknown += 1
+        elif event == "source_metadata":
+            counts["bq.metadata_requests"] += 1
         elif event == "bq_dry_run":
             counts["bq.dry_runs"] += 1
             estimated += item.get("estimated_bytes", 0) if type(item.get("estimated_bytes")) is int else 0
@@ -152,7 +158,9 @@ def agent_metrics(path: Path) -> dict[str, object]:
                 counts["bq.billing_unknown"] += 1
             billed += item.get("billed_bytes", 0) if type(item.get("billed_bytes")) is int else 0
         elif event in {"recovery", "empty_result"}:
-            decision = item.get("decision")
+            if event == "recovery" and item.get("outcome") in {"attempted", "success", "unsupported", "exhausted", "failed"}:
+                counts["recovery.outcome." + item["outcome"]] += 1
+            decision = item.get("decision", item.get("action"))
             counts[f"{event}.{decision if decision in WORDS else 'unknown'}"] += 1
         elif event == "model_attempt":
             counts["model.requests"] += 1

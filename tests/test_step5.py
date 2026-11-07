@@ -160,11 +160,28 @@ def test_deleted_retry_is_tombstoned_and_cannot_expose_or_resurrect(tmp_path: Pa
 
 
 def test_command_route_uses_no_model_or_bigquery_and_requires_explicit_token(tmp_path: Path):
+    # Historical selector retained for frozen manifests; preview now permits one catalog lookup.
     store = SQLiteStore(tmp_path / "reports.sqlite")
     report_id = saved(store, "manager_apparel", "c", "t", "Client X")
+    from test_step4 import FakeTurn
+    from opsfleet_assistant.contracts import AnalysisPlan, Period
+    from datetime import date
+    import json
+    # A genuine old ordinary report needs a current-authorizable saved plan.
+    plan = AnalysisPlan(operation="aggregate", metric="revenue", period=Period(start=date(2025,1,1), end=date(2026,1,1)))
+    from opsfleet_assistant.compiler import compile_plan
+    from opsfleet_assistant.identity import resolve_demo_scope
+    from opsfleet_assistant.bigquery_adapter import QueryLimits
+    turn = FakeTurn(SETTINGS, limits=QueryLimits())
+    catalog = turn.load_catalog()
+    query = compile_plan(plan, resolve_demo_scope("manager_apparel",catalog),catalog)
+    digest = hashlib.sha256(json.dumps([list(query.effective_brands)],separators=(",",":")).encode()).hexdigest()
+    store.db.execute("UPDATE reports SET plans_json=?,scope_digest=?", (json.dumps([plan.model_dump(mode="json")]),digest))
     def forbidden(*args, **kwargs):
-        raise AssertionError("model or BigQuery instantiated during deletion")
-    workflow = AssistantWorkflow(SETTINGS, store, gateway_factory=forbidden, turn_factory=forbidden)
+        raise AssertionError("model instantiated during deletion")
+    class CatalogOnly(FakeTurn):
+        def execute_compiled(self,*args):raise AssertionError("business query during deletion")
+    workflow = AssistantWorkflow(SETTINGS, store, gateway_factory=forbidden, turn_factory=CatalogOnly)
     missing = workflow.run("manager_apparel", "Delete all the reports we made in this conversation")
     assert missing.status == "clarification"
     preview = workflow.run("manager_apparel", "Delete all reports mentioning Client X", conversation_id="c")

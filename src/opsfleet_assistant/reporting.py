@@ -34,8 +34,19 @@ class GroundedSuggestion(StrictModel):
     text: str
 
 
+from .playbooks.base import DriverFinding
+
+
 class GroundedReport(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2, 3] = 1
+    driver: DriverFinding | None = None
+
+    @model_validator(mode="after")
+    def versioned_driver(self):
+        if (self.driver is not None) != (self.schema_version in {2, 3}):
+            raise ValueError("invalid_grounded_version")
+        return self
+
     factual_status: Literal["grounded", "evidence_only"]
     selection_status: Literal["selected", "fallback", "refused"]
     headline: str
@@ -48,7 +59,9 @@ _GROUPS = ("brand", "product_id", "user_id", "month", "demographic_value")
 _COUNTS = {"order_count", "customer_count", "item_count", "customers", "eligible_customers", "inactive_customers"}
 _SUPPORT = {
     Operation.PRODUCT_COMPARISON: {"revenue", "item_count", "order_count", "average_item_price"},
+    Operation.REGIONAL_SPEND: {"average_customer_spend", "customers", "revenue", "order_count"},
     Operation.DEMOGRAPHIC_COMPARISON: {"average_customer_spend", "customers", "revenue"},
+    Operation.CHURN_CHANGE: {"churn_rate", "eligible_customers", "inactive_customers"},
     Operation.CHURN_SNAPSHOT: {"churn_rate", "eligible_customers", "inactive_customers"},
 }
 
@@ -83,8 +96,12 @@ def _observation(ref: ObservationRef, evidence: tuple[Evidence, ...]):
     return item, row, number
 
 
-def _label(item: Evidence, row: dict, metric: str) -> str:
+def _label(item: Evidence, row: dict, metric: str, *, legacy_churn_labels: bool = False) -> str:
     labels = [f"{key} {row[key]}" for key in _GROUPS if key in row]
+    if item.operation == Operation.CHURN_CHANGE and not legacy_churn_labels:
+        key = row["segment_key"]
+        labels += ["overall prior purchasers" if key == "H:" else "country unknown (null source)" if key == "U:" else f"country {key[2:]}",
+                   f"{row['cutoff_role']} cutoff"]
     return (", ".join(labels) + " " if labels else "") + metric.replace("_", " ")
 
 
@@ -97,8 +114,9 @@ def _display(number: Decimal | None, metric: str = "") -> str:
 
 
 def _timing(item: Evidence, row: dict) -> str:
-    if item.operation == Operation.CHURN_SNAPSHOT:
-        cutoff = item.period_utc.get("cutoff_date")
+    if item.operation in {Operation.CHURN_SNAPSHOT, Operation.CHURN_CHANGE}:
+        cutoff = (item.metric_definition.get("baseline_cutoff_date") if row.get("cutoff_role") == "baseline"
+                  else item.period_utc.get("cutoff_date"))
         days = item.metric_definition.get("inactivity_days")
         if not cutoff or type(days) is not int or days < 1:
             _reject("invalid_finding_period")
@@ -111,10 +129,24 @@ def _timing(item: Evidence, row: dict) -> str:
     return f"UTC [{start}, {end})"
 
 
-def _compatible(a: Evidence, ar: dict, b: Evidence, br: dict, same: bool) -> None:
-    if not a.complete or not b.complete:
+def _compatible(a: Evidence, ar: dict, b: Evidence, br: dict, same: bool, *, legacy_order: bool = False) -> None:
+    safe_headline = same and a.operation == Operation.CHURN_CHANGE and ar.get("segment_key") == br.get("segment_key") == "H:"
+    if (not a.complete or not b.complete) and not safe_headline:
         _reject("incomplete_finding_comparison")
     if same:
+        playbook = a.metric_definition.get("playbook", {}).get("id")
+        if not legacy_order and playbook in {"product_revenue", "regional_spend"}:
+            key = "product_id" if playbook == "product_revenue" else "demographic_value"
+            choices = a.execution_scope.product_ids if key == "product_id" and a.execution_scope else a.metric_definition.get("demographic_values")
+            if not choices or (ar[key], br[key]) != tuple(choices):
+                _reject("incompatible_finding_population")
+        if a.operation == Operation.CHURN_CHANGE:
+            if ar.get("cutoff_role") != "current" or br.get("cutoff_role") != "baseline":
+                _reject("invalid_finding_period")
+            if ar.get("segment_key") != br.get("segment_key"):
+                _reject("incompatible_finding_population")
+            if a.metric_definition.get("cutoff_date", "") <= a.metric_definition.get("baseline_cutoff_date", ""):
+                _reject("invalid_finding_period")
         if a.operation == Operation.TIME_SERIES and ar.get("month", "") <= br.get("month", ""):
             _reject("invalid_finding_period")
         return  # Both groups were released by the same authorized query.
@@ -150,12 +182,12 @@ def _compatible(a: Evidence, ar: dict, b: Evidence, br: dict, same: bool) -> Non
         _reject("invalid_finding_period")
 
 
-def calculate(selection: FindingSelection, evidence: tuple[Evidence, ...]) -> GroundedFinding:
+def calculate(selection: FindingSelection, evidence: tuple[Evidence, ...], *, legacy_churn_labels: bool = False) -> GroundedFinding:
     """Compute a selected claim. Current minus baseline defines every delta."""
     selection = FindingSelection.model_validate(selection.model_dump())
     current = selection.current
     a, ar, av = _observation(current, evidence)
-    label = _label(a, ar, current.metric)
+    label = _label(a, ar, current.metric, legacy_churn_labels=legacy_churn_labels)
     timing = _timing(a, ar)
     refs = f"E{current.evidence_index + 1} row {current.row_index + 1}"
     value, baseline, delta, rank, tied = av, None, None, None, False
@@ -181,8 +213,8 @@ def calculate(selection: FindingSelection, evidence: tuple[Evidence, ...]) -> Gr
         b, br, baseline = _observation(selection.baseline, evidence)
         if current.metric != selection.baseline.metric:
             _reject("incompatible_finding_metric")
-        _compatible(a, ar, b, br, current.evidence_index == selection.baseline.evidence_index)
-        baseline_label = _label(b, br, current.metric)
+        _compatible(a, ar, b, br, current.evidence_index == selection.baseline.evidence_index, legacy_order=legacy_churn_labels)
+        baseline_label = _label(b, br, current.metric, legacy_churn_labels=legacy_churn_labels)
         baseline_timing = _timing(b, br)
         refs += f"; E{selection.baseline.evidence_index + 1} row {selection.baseline.row_index + 1}"
         with localcontext() as context:
@@ -266,20 +298,37 @@ def default_selections(evidence: tuple[Evidence, ...]) -> tuple[FindingSelection
     result = []
     for i, item in enumerate(evidence):
         metric = item.metric_definition.get("metric")
-        for row in range(min(len(item.rows), 2)):
+        indexes = ([i for i,r in enumerate(item.rows) if r.get("segment_key") == "H:"]
+                   if item.operation == Operation.CHURN_CHANGE else range(min(len(item.rows), 2)))
+        ordered_pair = None
+        playbook = item.metric_definition.get("playbook", {}).get("id")
+        if playbook in {"product_revenue", "regional_spend"} and len(item.rows) == 2:
+            key = "product_id" if playbook == "product_revenue" else "demographic_value"
+            choices = (item.execution_scope.product_ids if item.execution_scope else None) if key == "product_id" else item.metric_definition.get("demographic_values")
+            if choices and len(choices) == 2 and {r[key] for r in item.rows} == set(choices):
+                ordered_pair = tuple(next(j for j,r in enumerate(item.rows) if r[key] == value) for value in choices)
+                indexes = ordered_pair
+        for row in indexes:
             try:
                 result.append(FindingSelection(operation="observed_value", current=ObservationRef(evidence_index=i, row_index=row, metric=metric)))
             except ValidationError:
                 pass
-        if item.operation in {Operation.PRODUCT_COMPARISON, Operation.DEMOGRAPHIC_COMPARISON} and len(item.rows) == 2:
+        if item.operation in {Operation.PRODUCT_COMPARISON, Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND} and len(item.rows) == 2:
+            a, b = ordered_pair or (0, 1)
             result.append(FindingSelection(operation="difference",
-                current=ObservationRef(evidence_index=i, row_index=0, metric=metric),
-                baseline=ObservationRef(evidence_index=i, row_index=1, metric=metric)))
+                current=ObservationRef(evidence_index=i, row_index=a, metric=metric),
+                baseline=ObservationRef(evidence_index=i, row_index=b, metric=metric)))
             if item.operation == Operation.PRODUCT_COMPARISON:
                 for support in ("item_count", "average_item_price"):
                     result.append(FindingSelection(operation="difference",
-                        current=ObservationRef(evidence_index=i, row_index=0, metric=support),
-                        baseline=ObservationRef(evidence_index=i, row_index=1, metric=support)))
+                        current=ObservationRef(evidence_index=i, row_index=a, metric=support),
+                        baseline=ObservationRef(evidence_index=i, row_index=b, metric=support)))
+    if len(evidence) == 1 and evidence[0].operation == Operation.CHURN_CHANGE:
+        heads = {r["cutoff_role"]: i for i,r in enumerate(evidence[0].rows) if r["segment_key"] == "H:"}
+        if set(heads) == {"current", "baseline"}:
+            result.append(FindingSelection(operation="percentage_point_change",
+                current=ObservationRef(evidence_index=0,row_index=heads["current"],metric="churn_rate"),
+                baseline=ObservationRef(evidence_index=0,row_index=heads["baseline"],metric="churn_rate")))
     if len(evidence) == 2 and all(e.operation == Operation.CHURN_SNAPSHOT for e in evidence):
         result.append(FindingSelection(operation="percentage_point_change",
             current=ObservationRef(evidence_index=0, row_index=0, metric="churn_rate"),
@@ -314,30 +363,51 @@ def default_selections(evidence: tuple[Evidence, ...]) -> tuple[FindingSelection
     return tuple(result)
 
 
-def ground_report(draft: ReportDraft, evidence: tuple[Evidence, ...], *, fallback: bool = False) -> GroundedReport:
+def ground_report(draft: ReportDraft, evidence: tuple[Evidence, ...], *, fallback: bool = False,
+                  retained: GroundedReport | None = None) -> GroundedReport:
     # Revalidation also catches objects made with Pydantic's unchecked model_copy.
     draft = ReportDraft.model_validate(draft.model_dump())
-    defaults = default_selections(evidence)
-    selections = draft.findings or defaults
-    if draft.findings:
+    # Retained selections are application-owned saved support, never model input.
+    # Recalculate exactly those selections instead of appending changed defaults.
+    defaults = () if retained is not None else default_selections(evidence)
+    selections = tuple(f.selection for f in retained.findings) if retained is not None else draft.findings or defaults
+    if draft.findings and retained is None:
         # Preserve established product/demographic/churn comparisons regardless
         # of whether the model selects a shorter or observation-only summary.
         selections += tuple(s for s in defaults if s.baseline is not None and s not in selections)[:max(0, 20 - len(selections))]
     findings = []
     for selection in selections:
         try:
-            findings.append(calculate(selection, evidence))
+            findings.append(calculate(selection, evidence, legacy_churn_labels=retained is not None and retained.schema_version == 2))
         except PolicyError:
-            if draft.findings and not fallback:
+            if retained is not None or draft.findings and not fallback:
                 raise
     findings = tuple(findings)
     if draft.headline_index is not None and draft.headline_index >= len(findings):
         _reject("invalid_finding_reference")
     recommendations = tuple(_suggestion(s, findings, evidence, hypothesis=False) for s in draft.recommendations)
     hypotheses = tuple(_suggestion(s, findings, evidence, hypothesis=True) for s in draft.hypotheses)
-    return GroundedReport(factual_status="grounded" if findings else "evidence_only",
+    headline_index = (next((i for i,f in enumerate(findings) if f.text == retained.headline), None)
+                      if retained is not None else draft.headline_index)
+    if len(evidence) == 1 and evidence[0].operation == Operation.CHURN_CHANGE and findings:
+        def headline_pair(finding):
+            selection = finding.selection
+            return (selection.operation == "percentage_point_change" and selection.baseline is not None
+                    and evidence[0].rows[selection.current.row_index]["segment_key"] == "H:"
+                    and evidence[0].rows[selection.baseline.row_index]["segment_key"] == "H:")
+        if retained is None and headline_index is None:
+            headline_index = next((i for i,f in enumerate(findings) if headline_pair(f)), None)
+        chosen = findings[headline_index or 0]
+        legacy_headline_observation = (retained is not None and retained.schema_version == 2
+            and chosen.selection.operation == "observed_value"
+            and evidence[0].rows[chosen.selection.current.row_index]["segment_key"] == "H:")
+        if not headline_pair(chosen) and not legacy_headline_observation:
+            _reject("invalid_finding_reference")
+    from .playbooks import investigate
+    driver = investigate(evidence)
+    return GroundedReport(schema_version=retained.schema_version if retained is not None else 3 if driver else 1, driver=driver, factual_status="grounded" if findings else "evidence_only",
         selection_status="fallback" if fallback else draft.status,
-        headline=findings[draft.headline_index or 0].text if findings else "Checked retail analysis: no supported factual finding available.",
+        headline=findings[headline_index or 0].text if findings else "Checked retail analysis: no supported factual finding available.",
         findings=findings, recommendations=recommendations, hypotheses=hypotheses)
 
 
@@ -383,7 +453,7 @@ def report_spec(request: ResolvedRequest | RequestSpec) -> ReportSpec:
     if spec.purpose == "trend":
         sections.append("trend")
     if spec.comparison is not None or any(q.operation in {Operation.PRODUCT_COMPARISON,
-            Operation.DEMOGRAPHIC_COMPARISON} for q in spec.queries):
+            Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND} for q in spec.queries):
         sections.append("comparison")
     return ReportSpec(purpose="trend" if spec.purpose == "trend" else "executive",
                       requested_sections=tuple(sections + ["limitations", "recommendations"]))
@@ -409,7 +479,8 @@ def _required_sections(spec: ReportSpec, request: ResolvedRequest) -> list[str]:
 def apply_report_preferences(request: ResolvedRequest, grounded: GroundedReport) -> GroundedReport:
     """Keep unrequested actions out of every representation of a facts-only report."""
     if 'recommendations' not in _required_sections(report_spec(request), request):
-        return grounded.model_copy(update={'recommendations':(), 'hypotheses':()})
+        return grounded.model_copy(update={'recommendations':(), 'hypotheses':(),
+            'driver': grounded.driver.model_copy(update={"actions": ()}) if grounded.driver else None})
     return grounded
 
 
@@ -430,12 +501,13 @@ def compose_report(request: ResolvedRequest, evidence: tuple[Evidence, ...],
     missing = []
     for kind in required:
         refs = (comparison if kind == "comparison" else trend if kind == "trend" else observed)
-        supported = (bool(grounded.recommendations) if kind == "recommendations" else
+        supported = (bool(grounded.recommendations or grounded.driver and grounded.driver.actions) if kind == "recommendations" else
                      True if kind == "limitations" else bool(refs))
         if kind == "summary":
             supported = any(grounded.findings[i].text == grounded.headline for i in observed)
         if kind == "comparison" and request.comparison is not None:
-            supported = supported and all_checked and paired_coverage(grounded.findings, evidence)
+            supported = supported and all_checked and (paired_coverage(grounded.findings, evidence) or
+                bool(grounded.driver and grounded.driver.playbook_id == "churn_change" and grounded.driver.complete))
         # A trend section must expose at least two observed monthly points.
         if kind == "trend":
             supported = any(len({grounded.findings[i].selection.current.row_index for i in refs
@@ -452,6 +524,8 @@ def compose_report(request: ResolvedRequest, evidence: tuple[Evidence, ...],
             missing.append(kind)
     if not observed:
         missing.append("observations")
+    if grounded.driver and not grounded.driver.complete:
+        all_checked = False
     if not all_checked:
         missing.append("evidence_completeness")
     return ReportComposition(spec=spec, request=request,
@@ -489,6 +563,9 @@ def composition_text(composition: ReportComposition, grounded: GroundedReport | 
                     lines.extend(f"F{i + 1}: {grounded.findings[i].text}" for i in displayed)
                     if len(displayed) < len(selected):
                         lines.append("Additional checked findings are retained in the structured result.")
+    if grounded and grounded.driver:
+        from .playbooks.base import text as driver_text
+        lines.append(driver_text(grounded.driver))
     if composition.spec.purpose == "causal_investigation":
         lines.append("Causal limitation: these observations support associations or hypotheses only; they do not establish causes.")
     if composition.missing:

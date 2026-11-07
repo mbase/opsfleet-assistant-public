@@ -164,6 +164,8 @@ def test_smoke_results_and_stdout_export_budget_denials(tmp_path, monkeypatch, c
         target = tmp_path/relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT/relative, target)
+    from source_fixture import freeze_copied_source
+    freeze_copied_source(tmp_path)
     (tmp_path/'docs/remediation/runs/report-schema-fix-20261105').mkdir(parents=True)
     (tmp_path/'runtime').mkdir()
     expected = [{'turn':'single-t01','reason':'warehouse_executions_cap'}]

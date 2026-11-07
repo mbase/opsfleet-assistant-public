@@ -104,6 +104,8 @@ def test_bounded_probe_transport_accounting_and_safe_results(tmp_path, monkeypat
         target = tmp_path/relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT/relative, target)
+    from source_fixture import freeze_copied_source
+    freeze_copied_source(tmp_path)
     (tmp_path/'docs/remediation/runs/scope-grouping-prompt-20261105').mkdir(parents=True)
     (tmp_path/'runtime').mkdir()
     (tmp_path/'runtime/sentinel').write_text('unchanged')

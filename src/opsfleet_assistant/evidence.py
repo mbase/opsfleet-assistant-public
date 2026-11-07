@@ -21,6 +21,8 @@ _INTEGER = {"INTEGER", "INT64"}
 _NUMERIC = {"FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC", "DECIMAL"}
 _COLUMN_TYPES: dict[str, frozenset[str]] = {
     "brand": frozenset({"STRING"}),
+    "segment_key": frozenset({"STRING"}),
+    "cutoff_role": frozenset({"STRING"}),
     "product_id": frozenset(_INTEGER),
     "user_id": frozenset(_INTEGER),
     "month": frozenset({"DATE"}),
@@ -91,7 +93,7 @@ def _safe_text(value: str) -> str:
 
 def _normal_value(name: str, value: Any, kind: str, query: CompiledQuery) -> int | float | str | None:
     if value is None:
-        if name in {"average_order_value", "churn_rate"}:
+        if name in {"average_order_value", "churn_rate"} or name == "average_item_price" and "playbook" in query.metric_definition:
             return None
         raise PolicyError("result_null_violation")
     if kind in _INTEGER:
@@ -157,6 +159,9 @@ def release_evidence(
     if query.operation in {Operation.AGGREGATE, Operation.CHURN_SNAPSHOT} and query.result_contract.max_rows == 1 and len(rows) != 1:
         raise PolicyError("result_empty_violation")
 
+    if not rows and coverage.period_rows:
+        raise PolicyError("coverage_invalid")
+
     clean: list[dict[str, int | float | str | None]] = []
     for row in rows:
         clean.append({name: _normal_value(name, row[name], kind, query)
@@ -165,7 +170,10 @@ def release_evidence(
         if not clean and coverage.period_rows == 0:
             pass  # Genuine empty source: do not manufacture two requested products.
         elif len(clean) != 2 or {row["product_id"] for row in clean} != set(query.requested_product_ids or ()):
-            raise PolicyError("incomplete_comparison")
+            if "playbook" not in query.metric_definition:
+                raise PolicyError("incomplete_comparison")
+        if len({row["product_id"] for row in clean}) != len(clean):
+            raise PolicyError("result_scope_violation")
     if query.operation == Operation.DEMOGRAPHIC_COMPARISON:
         if any(row["customers"] < MIN_DEMOGRAPHIC_CUSTOMERS for row in clean):
             raise PolicyError("demographic_group_too_small")
@@ -174,6 +182,10 @@ def release_evidence(
                 raise PolicyError("incomplete_comparison")
         elif len(clean) == query.result_contract.max_rows:
             raise PolicyError("result_limit")
+    if query.operation == Operation.REGIONAL_SPEND:
+        if (len({row["demographic_value"] for row in clean}) != len(clean)
+                or any(row["customers"] < MIN_DEMOGRAPHIC_CUSTOMERS or row["order_count"] < row["customers"] for row in clean)):
+            raise PolicyError("result_type_violation")
     if query.operation == Operation.CHURN_SNAPSHOT and clean:
         if clean[0]["inactive_customers"] > clean[0]["eligible_customers"]:
             raise PolicyError("result_type_violation")
@@ -195,6 +207,17 @@ def release_evidence(
         note = "Churn cohort returned." if complete else "No prior purchasers; churn rate is undefined."
     if query.operation == Operation.AGGREGATE and query.result_contract.max_rows == 1 and len(columns) > 1 and clean:
         complete, note = False, "The result reached its row limit; more rows may exist."
+    if query.operation == Operation.PRODUCT_COMPARISON and "playbook" in query.metric_definition:
+        complete = len(clean) == 2 and all(row["item_count"] > 0 and row["average_item_price"] is not None for row in clean)
+        note = "Both qualifying products returned." if complete else "Attribution unavailable: a requested qualifying product or average item price is missing."
+    if query.operation == Operation.REGIONAL_SPEND:
+        complete = len(clean) == 2
+        note = "Both requested qualifying purchaser cohorts returned." if complete else "Comparison unavailable: a requested cohort is absent or withheld; neither zero nor absence is asserted."
+    if query.operation == Operation.CHURN_CHANGE:
+        from .playbooks.churn_change import validate_rows
+        validate_rows(clean)
+        complete = len(clean) > 2
+        note = "Complete safe country population at both cutoffs." if complete else "Country attribution unavailable: empty, withheld, unmatched or over-limit segment population; no segment detail released."
     if coverage.period_rows == 0:
         complete, note = False, "No qualifying scoped items in the requested UTC period or cutoff population."
     elif any(row.get("average_order_value", 0) is None for row in clean):
@@ -206,7 +229,7 @@ def release_evidence(
             or not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", coverage.job_id)
             or estimated_bytes < 0 or billed_bytes < 0):
         raise PolicyError("invalid_job_metadata")
-    if query.operation == Operation.DEMOGRAPHIC_COMPARISON:
+    if query.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE}:
         if coverage.source_rows is not None or coverage.period_rows is not None:
             raise PolicyError("demographic_complement_violation")
     elif (type(coverage.source_rows) is not int or type(coverage.period_rows) is not int
@@ -230,3 +253,11 @@ def release_evidence(
         job_id=job_id, estimated_bytes=estimated_bytes, billed_bytes=billed_bytes,
         coverage=coverage,
     )
+
+
+PROTECTED_UNAVAILABLE_TEXT = "No safely releasable observations; a requested population may be absent or withheld. No source absence or zero is asserted."
+
+def protected_unavailable(item: Evidence) -> bool:
+    """Empty protected output has no released basis for a source-empty claim."""
+    return (not item.rows and item.coverage.period_rows is None
+            and item.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE})

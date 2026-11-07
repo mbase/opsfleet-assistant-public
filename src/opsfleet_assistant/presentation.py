@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .contracts import ResolvedRequest, StrictModel
-from .evidence import Evidence
+from .evidence import Evidence, protected_unavailable, PROTECTED_UNAVAILABLE_TEXT
 from .reporting import GroundedReport, action_heading
 
 if TYPE_CHECKING:
@@ -26,12 +26,13 @@ if TYPE_CHECKING:
 class PresentationData(StrictModel):
     """Ephemeral view, never an independently saved source of analytical truth."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
+    driver: dict | None = None
     headline: str
     selection_status: Literal["selected", "fallback", "refused"]
     evidence: tuple[Evidence, ...] = Field(min_length=1, max_length=2)
     defaults: tuple[str, ...] = ()
-    empty_diagnosis: Literal["valid_empty", "incomplete"] | None = None
+    empty_diagnosis: Literal["valid_empty", "incomplete", "unavailable"] | None = None
     contextual_reuse: bool = False
     context_goal: Literal["explain", "why", "summary", "save"] | None = None
     actions_heading: str = "Recommended actions"
@@ -40,7 +41,8 @@ class PresentationData(StrictModel):
 def display_payload(evidence: tuple[Evidence, ...], grounded: GroundedReport,
                     request: ResolvedRequest | None, *, empty_diagnosis: str | None = None,
                     contextual_reuse: bool = False, context_goal: str | None = None) -> dict:
-    return PresentationData(headline=grounded.headline, selection_status=grounded.selection_status,
+    return PresentationData(schema_version=2 if grounded.driver else 1,
+        driver=grounded.driver.model_dump(mode="json") if grounded.driver else None, headline=grounded.headline, selection_status=grounded.selection_status,
         evidence=evidence,
         defaults=tuple(dict.fromkeys(s.field for s in request.spec.sources if s.origin == "default")) if request else (),
         empty_diagnosis=empty_diagnosis, contextual_reuse=contextual_reuse,
@@ -75,7 +77,10 @@ def display_value(value: object, column: str) -> str:
 
 
 def _line(console: Console, value: object, *, style: str = "") -> None:
-    console.print(Text(str(value), style=style, overflow="fold"), highlight=False)
+    import re
+    value = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', str(value))
+    value = ''.join(c for c in value if c in '\n\t' or c.isprintable())
+    console.print(Text(value, style=style, overflow="fold"), highlight=False)
 
 
 def _period(period: dict) -> str:
@@ -87,6 +92,9 @@ def _period(period: dict) -> str:
 
 
 def _values(console: Console, item: Evidence) -> None:
+    if protected_unavailable(item):
+        _line(console, PROTECTED_UNAVAILABLE_TEXT)
+        return
     if item.coverage.period_rows == 0:
         _line(console, "No matching data; aggregate zero is not an observed result.")
         return
@@ -150,12 +158,12 @@ _STATES = {
     "partial": "Partial report", "ok": "Answer",
 }
 _RECOVERY = {
-    "provider": "Check provider/warehouse connectivity and configuration, then retry. No successful save is claimed.",
+    "provider": "Check provider/warehouse connectivity and configuration. Check job status before retrying when submission is uncertain. No successful save is claimed.",
     "storage": "Check the local state path and access, then retry with the same conversation and turn IDs.",
     "budget": "Narrow the request or retry when dependencies are available; no complete result is claimed.",
     "policy": "Use an authorized scope and supported metric/period, or start a new conversation if context is incompatible.",
-    "syntax": "Retry the supported request; if it repeats, use the trace reference to investigate.",
-    "schema": "Check source compatibility; use the trace reference if the problem persists.",
+    "syntax": "The query compiler needs a code correction. Use the trace reference to report the defect.",
+    "schema": "Source correction is unavailable. Use the trace reference to report incompatible source fields.",
     "internal": "Retry the request; use the trace reference if the problem persists.",
 }
 
@@ -170,6 +178,9 @@ def render_result(console: Console, result: TurnResult, *, verbose: bool = False
         for finding in result.factual_findings:
             if finding["text"] != payload.headline:
                 _line(console, finding["text"])
+        if payload and payload.driver:
+            from .playbooks.base import DriverFinding, text as driver_text
+            _line(console, driver_text(DriverFinding.model_validate(payload.driver)))
         for role, period in (result.resolved_periods or {}).items():
             if period:
                 _line(console, f"{role.capitalize()}: {_period(period)}")
@@ -206,10 +217,12 @@ def render_result(console: Console, result: TurnResult, *, verbose: bool = False
             _line(console, f"Methodology: synthetic authored example {result.golden_trio_id}; {result.golden_method}. All figures come from scoped warehouse evidence.")
         elif result.golden_status == "outage":
             _line(console, "Approved methodology lookup unavailable; the supported analysis path was used.")
-        if payload.empty_diagnosis:
+        if payload.empty_diagnosis == "unavailable":
+            _line(console, PROTECTED_UNAVAILABLE_TEXT)
+        elif payload.empty_diagnosis:
             _line(console, "No matching scoped source data." if payload.empty_diagnosis == "valid_empty" else
                   "No matching data released; diagnosis could not finish within the remaining budget.")
-        elif result.reused_report and any(not e.rows or e.coverage.period_rows == 0 for e in payload.evidence):
+        elif result.reused_report and any((not e.rows or e.coverage.period_rows == 0) and not protected_unavailable(e) for e in payload.evidence):
             _line(console, "Saved empty-data diagnostic outcome is unavailable in structured support; it may have stopped at the original budget. Exact original notes remain in the JSON text field.")
         for i, item in enumerate(payload.evidence, 1):
             _line(console, f"E{i} limitations and definitions", style="bold")
@@ -236,11 +249,21 @@ def render_result(console: Console, result: TurnResult, *, verbose: bool = False
         if result.report_completeness == "legacy":
             _line(console, "Legacy saved report: structured evidence/completeness unavailable; original content follows. Historical completeness claims are not reverified.")
         _line(console, result.text)
+        if payload and payload.driver:
+            from .playbooks.base import DriverFinding, text as driver_text
+            _line(console, driver_text(DriverFinding.model_validate(payload.driver)))
         for role, period in (result.resolved_periods or {}).items():
             if period:
                 _line(console, f"{role.capitalize()}: {_period(period)}")
     if result.status == "error":
-        _line(console, _RECOVERY.get(result.error_category, "Use the recovery instructions above; retry with the same IDs if appropriate."))
+        warehouse_failure = (result.failure_stage in {"dry_run", "execute", "metadata", "compile", "evidence_checks"}
+                             or result.failure_job_id is not None or result.analysis_job_id is not None)
+        if result.analysis_submission_state == "submitted":
+            _line(console, "Analysis completed but its diagnostic or evidence checks failed. Automatic replay stopped; inspect the job before submitting again.")
+        elif warehouse_failure and result.failure_submission_state != "not_submitted":
+            _line(console, "Submission may have run or billed. Automatic replay stopped; check warehouse job status and billing before submitting again.")
+        else:
+            _line(console, _RECOVERY.get(result.error_category, "Use the recovery instructions above; retry with the same IDs if appropriate."))
     if result.report_id is not None:
         _line(console, f"Saved report: {result.report_id} (completeness: {result.report_completeness or 'legacy'})")
     if result.reused_report:
@@ -248,6 +271,12 @@ def render_result(console: Console, result: TurnResult, *, verbose: bool = False
     _line(console, f"Conversation: {result.conversation_id}")
     _line(console, f"Trace: {result.trace_id or 'unavailable'}")
     if verbose:
+        if result.status == "error":
+            failure_bytes = result.failure_billed_bytes if result.failure_billed_bytes is not None else "unknown"
+            analysis_bytes = result.analysis_billed_bytes if result.analysis_billed_bytes is not None else "unknown"
+            _line(console, f"Failure: stage {result.failure_stage}; purpose {result.failure_purpose}; submission {result.failure_submission_state}; job {result.failure_job_id or 'unavailable'}; billed bytes {failure_bytes}")
+            if result.analysis_submission_state != "unknown":
+                _line(console, f"Analysis: submission {result.analysis_submission_state}; job {result.analysis_job_id or 'unavailable'}; billed bytes {analysis_bytes}")
         _line(console, f"Turn: {result.turn_id}")
         _line(console, f"Model routes: {', '.join(result.model_routes) or 'none'}; requests: {result.model_requests}")
         billed = result.billed_bytes if result.billed_bytes is not None else "unknown"
@@ -256,3 +285,26 @@ def render_result(console: Console, result: TurnResult, *, verbose: bool = False
         if payload:
             for i, item in enumerate(payload.evidence, 1):
                 _line(console, f"E{i} detailed metadata: " + json.dumps(item.model_dump(mode="json", exclude={"rows"}), ensure_ascii=False, sort_keys=True))
+
+
+def render_navigation(console, result):
+    """Stacked bounded records work on narrow terminals; saved strings are literal."""
+    def literal(value):
+        # Strip C0/C1 controls and escape sequences at display time only.
+        import re
+        text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', str(value))
+        text = ''.join(c for c in text if c in '\n\t' or c.isprintable())
+        console.print(Text(text, overflow='fold'), highlight=False)
+    literal(f'{result.operation}: {result.status}')
+    if result.active_conversation:
+        literal('Active conversation: ' + result.active_conversation)
+    for item in result.items:
+        for key, value in item.items():
+            literal(f'{key}: {value}')
+        literal('')
+    if result.content:
+        for key,value in result.content.items():
+            if key != 'support':literal(f'{key}: {value}')
+    if result.next_cursor:
+        literal('Next page: --cursor ' + result.next_cursor + ' (retain --limit)')
+    if result.message:literal(result.message)

@@ -36,6 +36,8 @@ class Operation(StrEnum):
     PRODUCT_COMPARISON = "product_comparison"
     DEMOGRAPHIC_COMPARISON = "demographic_comparison"
     CHURN_SNAPSHOT = "churn_snapshot"
+    REGIONAL_SPEND = "regional_spend"
+    CHURN_CHANGE = "churn_change"
 
 
 class Metric(StrEnum):
@@ -117,12 +119,21 @@ class BrandScope(StrictModel):
     authorization_version: int = Field(ge=1)
 
 
+class PlaybookChoice(StrictModel):
+    id: Literal["product_revenue", "regional_spend", "churn_change"]
+    version: Literal[1] = 1
+    population: Literal["qualifying_purchasers"] | None = None
+    segment: Literal["country"] | None = None
+
+
 class AnalysisPlan(StrictModel):
-    version: int = Field(default=1, ge=1, le=1)
+    version: int = Field(default=1, ge=1, le=2)
+    playbook: PlaybookChoice | None = None
     operation: Operation
     metric: Metric
     period: Period | None = None
     cutoff_date: date | None = None
+    baseline_cutoff_date: date | None = None
     dimension: Dimension | None = None
     requested_brands: tuple[str, ...] | None = None
     product_ids: tuple[int, ...] | None = None
@@ -133,6 +144,19 @@ class AnalysisPlan(StrictModel):
 
     @model_validator(mode="after")
     def valid_operation(self) -> "AnalysisPlan":
+        if (self.playbook is not None) != (self.version == 2):
+            raise ValueError("invalid_plan_version")
+        if self.playbook:
+            expected = {"product_revenue": Operation.PRODUCT_COMPARISON, "regional_spend": Operation.REGIONAL_SPEND,
+                        "churn_change": Operation.CHURN_CHANGE}[self.playbook.id]
+            if self.operation != expected:
+                raise ValueError("invalid_playbook_operation")
+            if self.playbook.id == "product_revenue" and (self.playbook.population or self.playbook.segment):
+                raise ValueError("invalid_product_playbook")
+            if self.playbook.id in {"regional_spend", "churn_change"} and self.playbook.population != "qualifying_purchasers":
+                raise ValueError("invalid_playbook_population")
+            if self.playbook.id == "regional_spend" and self.playbook.segment:
+                raise ValueError("invalid_regional_segment")
         if not self.revenue_statuses or len(set(self.revenue_statuses)) != len(self.revenue_statuses):
             raise ValueError("invalid_status_set")
         if self.requested_brands is not None:
@@ -155,6 +179,23 @@ class AnalysisPlan(StrictModel):
             if len(set(self.demographic_values)) != 2:
                 raise ValueError("duplicate_demographic_value")
 
+        if self.operation != Operation.CHURN_CHANGE and self.baseline_cutoff_date is not None:
+            raise ValueError("unexpected_baseline_cutoff")
+        if self.operation == Operation.CHURN_CHANGE:
+            if (self.playbook is None or self.playbook.id != "churn_change" or self.playbook.segment != "country"
+                    or self.metric != Metric.CHURN_RATE or self.cutoff_date is None
+                    or self.baseline_cutoff_date is None or self.baseline_cutoff_date >= self.cutoff_date
+                    or self.period is not None or self.dimension is not None or self.demographic_values is not None
+                    or self.inactivity_days != 90 or self.limit != 20):
+                raise ValueError("invalid_churn_change_plan")
+            return self
+        if self.operation == Operation.REGIONAL_SPEND:
+            if (self.playbook is None or self.playbook.id != "regional_spend"
+                    or self.metric != Metric.AVERAGE_CUSTOMER_SPEND or self.dimension != Dimension.STATE
+                    or self.demographic_values is None or self.period is None or self.cutoff_date is not None
+                    or self.inactivity_days != 90 or self.limit != 2):
+                raise ValueError("invalid_regional_plan")
+            return self
         if self.operation == Operation.CHURN_SNAPSHOT:
             if (self.metric != Metric.CHURN_RATE or self.cutoff_date is None or
                     self.period is not None or self.dimension is not None or
@@ -300,6 +341,7 @@ class ReportSpec(StrictModel):
 
 
 class RequestSpec(StrictModel):
+    playbook: PlaybookChoice | None = None
     intent: Literal["analysis", "schema_help", "explain", "why", "summary", "save", "cancel"] = "analysis"
     mode: Mode = Mode.ANALYSIS
     purpose: Literal["standard", "trend"] = "standard"

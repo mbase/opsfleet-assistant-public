@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
@@ -16,9 +17,12 @@ from google.cloud import bigquery
 import requests
 
 from .compiler import BoundParameter, CompiledQuery, DATASET, compile_plan, is_trusted_compiled
+from .recovery import FailureContext, RecoveryOutcome, SubmissionState, decide_recovery, terminal_outcome
+from .source_schema import DATASET as SOURCE_DATASET, TABLES, PUBLIC_BINDING, SourceBinding, choose_binding, bind_sql
+from .compiler import semantic_fingerprint, execution_fingerprint
 from .config import Settings
 from .contracts import AnalysisPlan, Operation
-from .evidence import Coverage, Evidence, release_evidence
+from .evidence import protected_unavailable, Coverage, Evidence, release_evidence
 from .identity import Catalog, PolicyError, resolve_demo_scope
 
 
@@ -64,7 +68,19 @@ _JOB_ID = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 class ExecutionError(Exception):
     """Safe category and class only; no provider text or SQL escapes."""
 
-    def __init__(self, category: str, kind: str = "policy"):
+    def __init__(self, category: str, kind: str = "policy", *,
+                 submission_state: SubmissionState = SubmissionState.UNKNOWN,
+                 stage: str = "unknown", job_id: str | None = None,
+                 billed_bytes: int | None = None):
+        self.submission_state = submission_state
+        self.stage = stage
+        self.job_id = job_id if job_id and _JOB_ID.fullmatch(job_id) else None
+        self.billed_bytes = billed_bytes
+        self.analysis_job_id: str | None = None
+        self.analysis_billed_bytes: int | None = None
+        self.analysis_submission_state = SubmissionState.UNKNOWN
+        self.purpose = "unknown"
+        self.recovery_recorded = False
         self.category = category
         self.kind = kind
         super().__init__(category)
@@ -168,8 +184,15 @@ class BigQueryTurn:
         self.billing_unknown = False
         self.dry_runs = 0
         self.retries = 0
+        self._recovery_reported = False
+        self._successful_retry_purposes: set[str] = set()
+        self._pending_corrections: set[str] = set()
+        self._completed_jobs: dict[str, _Completed] = {}
         self.telemetry = None
         self._catalog: Catalog | None = None
+        self.schema_metadata_requests = 0
+        self._schema_inspection_started = False
+        self._inspected_binding = None
 
     def _remaining_seconds(self) -> float:
         remaining = self.limits.turn_seconds - (self._clock() - self._started)
@@ -177,19 +200,77 @@ class BigQueryTurn:
             raise ExecutionError("turn_timeout")
         return min(self.limits.job_seconds, remaining)
 
+    def _check_deadline(self, deadline: float | None = None) -> float:
+        remaining = self._started + self.limits.turn_seconds - self._clock()
+        if deadline is not None:
+            remaining = min(remaining, deadline - self._clock())
+        if remaining <= 0:
+            raise TimeoutError("warehouse_deadline")
+        return remaining
+
+    @contextmanager
+    def _bounded_rpc(self, deadline: float):
+        """Clamp each SDK HTTP request, including lazy pages, after SDK timeout floors.
+
+        The client belongs to this synchronous turn. Restore its connection even on
+        failure. Injected adapters without an SDK connection still use clock guards.
+        """
+        connection = getattr(self.client, "_connection", None)
+        original = getattr(connection, "api_request", None)
+        if original is None:
+            self._check_deadline(deadline)
+            yield
+            self._check_deadline(deadline)
+            return
+        def request(*args, **kwargs):
+            remaining = self._check_deadline(deadline)
+            timeout = kwargs.get("timeout")
+            kwargs["timeout"] = min(remaining, timeout) if isinstance(timeout, (int, float)) else remaining
+            result = original(*args, **kwargs)
+            self._check_deadline(deadline)
+            return result
+        connection.api_request = request
+        try:
+            self._check_deadline(deadline)
+            yield
+            self._check_deadline(deadline)
+        finally:
+            connection.api_request = original
+
+    def _recovery_success(self, query: CompiledQuery) -> None:
+        correction = bool(self._pending_corrections) and execution_fingerprint(query) in self._pending_corrections
+        self._check_deadline()
+        if self._recovery_reported or not (correction or self._successful_retry_purposes):
+            return
+        self._recovery_reported = True
+        if self.telemetry:
+            self.telemetry.emit("recovery", action="recompile_supported_binding" if correction else "retry_before_submission",
+                                reason="binding_changed" if correction else "transient_before_submission", outcome="success")
+
     def _run(self, sql: str, parameters: Sequence[BoundParameter], *, max_rows: int, purpose: str) -> _Completed:
         for attempt in range(2):
-            executions_before = self.executions
             try:
-                return self._run_once(sql, parameters, max_rows=max_rows, purpose=purpose)
+                completed = self._run_once(sql, parameters, max_rows=max_rows, purpose=purpose)
+                self._completed_jobs[purpose] = completed
+                if attempt:
+                    self._successful_retry_purposes.add(purpose)
+                return completed
             except ExecutionError as exc:
-                # A submitted job may still run or bill after failure. Retry only a failed dry run.
-                if (exc.category != "provider_transient" or self.executions != executions_before
-                        or attempt or self.retries >= 2):
+                decision = decide_recovery(FailureContext(
+                    exc.category, exc.stage, exc.submission_state, max(self.retries, 2 if attempt else 0),
+                    self.executions < self.limits.max_executions and self.dry_runs < self.limits.max_executions + 4
+                    and self.billed_bytes < self.limits.per_turn_bytes and not self.billing_unknown,
+                    self._clock() - self._started < self.limits.turn_seconds))
+                exc.purpose = purpose
+                outcome = "attempted" if decision.action == "retry_before_submission" else terminal_outcome(decision)
+                recovery = RecoveryOutcome(decision.action, decision.reason, outcome)
+                if self.telemetry and exc.category != "query_schema_error":
+                    self.telemetry.emit("recovery", action=recovery.action,
+                                        reason=recovery.reason, outcome=recovery.outcome)
+                    exc.recovery_recorded = outcome != "attempted"
+                if decision.action != "retry_before_submission" or attempt:
                     raise
                 self.retries += 1
-                if self.telemetry:
-                    self.telemetry.emit("recovery", decision="retry", category="transient", purpose=purpose)
                 delay = min(0.2, max(0.0, self._remaining_seconds() - 0.01))
                 if delay <= 0:
                     raise ExecutionError("turn_timeout") from None
@@ -197,6 +278,8 @@ class BigQueryTurn:
         raise ExecutionError("provider_failure")
 
     def _run_once(self, sql: str, parameters: Sequence[BoundParameter], *, max_rows: int, purpose: str) -> _Completed:
+        if self.billing_unknown:
+            raise ExecutionError("billing_unknown", "provider")
         if self.executions >= self.limits.max_executions:
             raise ExecutionError("query_count_limit")
         if self.dry_runs >= self.limits.max_executions + 4:
@@ -212,13 +295,17 @@ class BigQueryTurn:
         )
         self.dry_runs += 1
         try:
-            dry_job = self.client.query(sql, job_config=dry_config, location=self.settings.location,
-                                        timeout=timeout, retry=None, job_retry=None)
-            estimate = int(dry_job.total_bytes_processed or 0)
+            with self._bounded_rpc(self._clock() + timeout):
+                dry_job = self.client.query(sql, job_config=dry_config, location=self.settings.location,
+                                            timeout=timeout, retry=None, job_retry=None)
+                estimate = int(dry_job.total_bytes_processed or 0)
         except Exception as exc:
             if self.telemetry:
                 self.telemetry.emit("bq_dry_run", status="error", purpose=purpose, category="provider")
-            raise _classify(exc) from None
+            failure = _classify(exc)
+            failure.submission_state = SubmissionState.NOT_SUBMITTED
+            failure.stage = "dry_run"
+            raise failure from None
         self.estimated_bytes += estimate
         if self.telemetry:
             self.telemetry.emit("bq_dry_run", status="ok", purpose=purpose, estimated_bytes=estimate)
@@ -235,14 +322,25 @@ class BigQueryTurn:
         job_deadline = self._clock() + timeout
         self.executions += 1
         try:
-            job = self.client.query(sql, job_config=run_config, location=self.settings.location,
-                                    timeout=timeout, retry=None, job_retry=None)
-            result_timeout = min(self._remaining_seconds(), job_deadline - self._clock())
-            if result_timeout <= 0:
-                raise TimeoutError("job_deadline")
-            result = job.result(timeout=result_timeout, max_results=max_rows + 1,
-                                retry=None, job_retry=None)
-            rows = tuple(dict(row.items()) for row in result)
+            with self._bounded_rpc(job_deadline):
+                job = self.client.query(sql, job_config=run_config, location=self.settings.location,
+                                        timeout=timeout, retry=None, job_retry=None)
+                result = job.result(timeout=self._check_deadline(job_deadline), max_results=max_rows + 1,
+                                    retry=None, job_retry=None)
+                collected = []
+                iterator = iter(result)
+                while True:
+                    self._check_deadline(job_deadline)
+                    try:
+                        row = next(iterator)
+                    except StopIteration:
+                        self._check_deadline(job_deadline)
+                        break
+                    self._check_deadline(job_deadline)
+                    collected.append(dict(row.items()))
+                    if len(collected) > max_rows:
+                        raise ExecutionError("result_or_billing_limit")
+                rows = tuple(collected)
             billed = job.total_bytes_billed
             if billed is None:
                 raise ExecutionError("billing_unknown", "provider")
@@ -256,6 +354,7 @@ class BigQueryTurn:
                 raise ExecutionError("invalid_job_metadata", "provider")
             as_of = job.ended or datetime.now(timezone.utc)
             schema = job.schema or result.schema
+            self._check_deadline(job_deadline)
             if self.telemetry:
                 self.telemetry.emit("bq_job", status="ok", purpose=purpose, job_id=job_id,
                                     billed_bytes=billed, estimated_bytes=estimate)
@@ -267,10 +366,14 @@ class BigQueryTurn:
                                     job_id=str(getattr(job, "job_id", "")) if job is not None else "unknown",
                                     category="provider", usage="known" if known_billing else "unknown",
                                     **({"billed_bytes": max(0, int(job.total_bytes_billed))} if known_billing else {}))
+            cancellation_requested = False
             if job is not None:
                 try:
                     # Cancellation is a request, not proof that billing or execution stopped.
-                    job.cancel(retry=None, timeout=1.0)
+                    allowance = min(1.0, self._check_deadline(job_deadline))
+                    with self._bounded_rpc(min(job_deadline, self._clock() + allowance)):
+                        cancellation_requested = True
+                        job.cancel(retry=None, timeout=allowance)
                 except Exception:
                     pass
                 if not billed_recorded:
@@ -283,11 +386,103 @@ class BigQueryTurn:
                 self.billing_unknown = True
                 self.billed_bytes += cap
             if isinstance(exc, (TimeoutError, google_errors.DeadlineExceeded)) or self._clock() - self._started >= self.limits.turn_seconds:
-                raise ExecutionError("timeout_cancellation_requested", "transient") from None
-            raise _classify(exc) from None
+                failure = ExecutionError("timeout_cancellation_requested" if cancellation_requested else "warehouse_timeout", "transient")
+            else:
+                failure = _classify(exc)
+            failure.submission_state = SubmissionState.SUBMITTED if job is not None else SubmissionState.UNKNOWN
+            failure.stage = "execute"
+            job_id = str(getattr(job, "job_id", ""))
+            failure.job_id = job_id if _JOB_ID.fullmatch(job_id) else None
+            failure.billed_bytes = getattr(job, "total_bytes_billed", None)
+            raise failure from None
+
+    def recovery_available(self) -> bool:
+        return (not self.billing_unknown and self.executions < self.limits.max_executions
+                and self.dry_runs < self.limits.max_executions + 4
+                and self.billed_bytes < self.limits.per_turn_bytes)
+
+    def inspect_source_schema(self):
+        """One four-table metadata cycle per turn, with no SDK retry or query job."""
+        if self._schema_inspection_started:
+            if self._inspected_binding is None:
+                raise ExecutionError("query_schema_error", stage="metadata", submission_state=SubmissionState.NOT_SUBMITTED)
+            return self._inspected_binding
+        self._schema_inspection_started = True
+        schemas = {}
+        for table in TABLES:
+            if not self.recovery_available():
+                raise ExecutionError("query_count_limit" if self.executions >= self.limits.max_executions
+                                     else "dry_run_limit" if self.dry_runs >= self.limits.max_executions + 4
+                                     else "billing_unknown" if self.billing_unknown else "turn_byte_limit")
+            timeout = self._remaining_seconds()
+            self.schema_metadata_requests += 1
+            if self.telemetry:
+                self.telemetry.emit("source_metadata", status="start", count=1)
+            try:
+                with self._bounded_rpc(self._clock() + timeout):
+                    metadata = self.client.get_table(f"{SOURCE_DATASET}.{table}", retry=None, timeout=timeout)
+                if len(metadata.schema) > 256:
+                    raise ExecutionError("query_schema_error")
+                fields = {}
+                for field in metadata.schema:
+                    kind = {"INTEGER": "INT64", "FLOAT": "FLOAT64", "BOOLEAN": "BOOL"}.get(
+                        field.field_type.upper(), field.field_type.upper())
+                    if field.name in fields:
+                        raise ExecutionError("query_schema_error")
+                    fields[field.name] = (kind, field.mode.upper())
+                schemas[table] = fields
+            except Exception as exc:
+                failure = (ExecutionError("turn_timeout") if self._clock() - self._started >= self.limits.turn_seconds
+                           else _classify(exc))
+                failure.stage = "metadata"
+                failure.submission_state = SubmissionState.NOT_SUBMITTED
+                raise failure from None
+        try:
+            self._inspected_binding = choose_binding(schemas)
+        except PolicyError as exc:
+            raise ExecutionError(exc.code, stage="metadata", submission_state=SubmissionState.NOT_SUBMITTED) from None
+        return self._inspected_binding
+
+    def _compile_for_binding(self, query: CompiledQuery, plan: AnalysisPlan, owner: str,
+                             binding: SourceBinding) -> CompiledQuery:
+        """Reauthorize and verify semantics independently of correction eligibility."""
+        if not is_trusted_compiled(query):
+            raise ExecutionError("untrusted_compiled_query")
+        catalog = self.load_catalog()  # Cached authorization catalog, not a schema refresh.
+        try:
+            scope = resolve_demo_scope(owner, catalog)
+            corrected = compile_plan(plan, scope, catalog, binding=binding, temporal_role=query.temporal_role)
+        except PolicyError as exc:
+            raise ExecutionError(exc.code, stage="compile", submission_state=SubmissionState.NOT_SUBMITTED) from None
+        if semantic_fingerprint(query) != semantic_fingerprint(corrected):
+            raise ExecutionError("recovery_scope_changed", stage="compile", submission_state=SubmissionState.NOT_SUBMITTED)
+        return corrected
+
+    def correct_schema_binding(self, query: CompiledQuery, plan: AnalysisPlan, owner: str) -> CompiledQuery:
+        if not is_trusted_compiled(query):
+            raise ExecutionError("untrusted_compiled_query")
+        corrected = self._compile_for_binding(query, plan, owner, self.inspect_source_schema())
+        if execution_fingerprint(query) == execution_fingerprint(corrected):
+            raise ExecutionError("query_schema_error", stage="compile", submission_state=SubmissionState.NOT_SUBMITTED)
+        self._pending_corrections.add(execution_fingerprint(corrected))
+        return corrected
+
+    def adopt_inspected_binding(self, query: CompiledQuery, plan: AnalysisPlan, owner: str) -> CompiledQuery:
+        if self._inspected_binding is None:
+            return query
+        # Unaffected queries may have identical execution inputs under this binding.
+        # Adoption is neither a repair attempt nor a successful correction.
+        return self._compile_for_binding(query, plan, owner, self._inspected_binding)
+
+    def _binding_for(self, query: CompiledQuery):
+        if query.source_binding_version == PUBLIC_BINDING.version:
+            return PUBLIC_BINDING
+        if self._inspected_binding is not None and query.source_binding_version == self._inspected_binding.version:
+            return self._inspected_binding
+        raise ExecutionError("query_schema_error")
 
     def refresh_catalog(self) -> Catalog:
-        """One explicitly charged metadata refresh for a compatible schema failure."""
+        """Reload product catalog; this does not inspect source schemas."""
         self._catalog = None
         return self.load_catalog()
 
@@ -308,6 +503,7 @@ class BigQueryTurn:
     def _check_compiled(self, query: CompiledQuery, catalog: Catalog) -> None:
         if not is_trusted_compiled(query):
             raise ExecutionError("untrusted_compiled_query")
+        self._binding_for(query)  # Alternate bindings require verified metadata this turn.
         try:
             scope = resolve_demo_scope(query.scope_user_id, catalog)
         except PolicyError as exc:
@@ -323,15 +519,15 @@ class BigQueryTurn:
             raise ExecutionError("product_not_available")
 
     def _coverage(self, query: CompiledQuery) -> Coverage:
-        names = {"brands", "statuses", "cutoff_ts"} if query.operation.value == "churn_snapshot" else {"brands", "statuses", "start_ts", "end_ts"}
+        names = {"brands", "statuses", "cutoff_ts"} if query.operation in {Operation.CHURN_SNAPSHOT, Operation.CHURN_CHANGE} else {"brands", "statuses", "start_ts", "end_ts"}
         if query.requested_product_ids is not None:
             names.add("product_ids")
         params = tuple(parameter for parameter in query.parameters if parameter.name in names)
-        sql = _COVERAGE_CHURN_SQL if query.operation.value == "churn_snapshot" else _COVERAGE_SQL
+        sql = _COVERAGE_CHURN_SQL if query.operation in {Operation.CHURN_SNAPSHOT, Operation.CHURN_CHANGE} else _COVERAGE_SQL
         if query.requested_product_ids is not None:
             sql += "  AND oi.product_id IN UNNEST(@product_ids)\n"
         completed = self._run(
-            sql, params, max_rows=1, purpose="coverage",
+            bind_sql(sql, self._binding_for(query)), params, max_rows=1, purpose="coverage",
         )
         if tuple(field.name for field in completed.schema) != ("source_rows", "period_rows", "latest_item_at") or len(completed.rows) != 1:
             raise ExecutionError("coverage_invalid")
@@ -341,7 +537,7 @@ class BigQueryTurn:
             raise ExecutionError("coverage_invalid")
         if latest is not None and (not isinstance(latest, datetime) or latest.tzinfo is None):
             raise ExecutionError("coverage_invalid")
-        demographic = query.operation == Operation.DEMOGRAPHIC_COMPARISON
+        demographic = query.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE}
         return Coverage(
             status="checked",
             source_rows=None if demographic else source_rows,
@@ -367,7 +563,7 @@ class BigQueryTurn:
         if query.requested_product_ids is not None:
             params += (query.parameter("product_ids"),)
             sql += "  AND oi.product_id IN UNNEST(@product_ids)\n"
-        completed = self._run(sql, params, max_rows=1, purpose="customer_check")
+        completed = self._run(bind_sql(sql, self._binding_for(query)), params, max_rows=1, purpose="customer_check")
         if (tuple(field.name for field in completed.schema) != ("matched_customers",)
                 or len(completed.rows) != 1
                 or completed.rows[0].get("matched_customers") != len(ids)):
@@ -376,20 +572,52 @@ class BigQueryTurn:
     def execute_compiled(self, query: CompiledQuery) -> Evidence:
         catalog = self.load_catalog()
         self._check_compiled(query, catalog)
+        self._successful_retry_purposes.intersection_update({"catalog"})
+        for purpose in ("analysis", "coverage", "customer_check"):
+            self._completed_jobs.pop(purpose, None)
         completed = self._run(query.sql, query.parameters,
                               max_rows=query.result_contract.max_rows, purpose="analysis")
-        if query.operation == Operation.RANK_CUSTOMERS:
-            self._check_customer_ids(query, completed.rows)
-        coverage = self._coverage(query)
+        phase = "customer_check" if query.operation == Operation.RANK_CUSTOMERS else "coverage"
         try:
-            return release_evidence(
+            if query.operation == Operation.RANK_CUSTOMERS:
+                self._check_customer_ids(query, completed.rows)
+            phase = "coverage"
+            coverage = self._coverage(query)
+            phase = "evidence_checks"
+            self._check_deadline()
+            evidence = release_evidence(
                 query, completed.rows, completed.schema,
                 job_id=completed.job_id, estimated_bytes=completed.estimated_bytes,
                 billed_bytes=completed.billed_bytes, query_as_of=completed.as_of,
                 coverage=coverage,
             )
-        except PolicyError as exc:
-            raise _classify(exc) from None
+            self._check_deadline()
+            if not protected_unavailable(evidence):
+                self._recovery_success(query)
+            return evidence
+        except Exception as exc:
+            if isinstance(exc, TimeoutError):
+                failure = ExecutionError("warehouse_timeout", "transient", stage="evidence_checks")
+            elif isinstance(exc, (PolicyError, ExecutionError)):
+                failure = _classify(exc)
+            else:
+                # Unexpected post-analysis failures must retain trusted job context,
+                # never the exception's text, attributes or provider classification.
+                failure = ExecutionError("internal_failure", "internal")
+            if failure.purpose == "unknown":
+                failure.purpose = phase
+            if failure.stage == "unknown":
+                failure.stage = "evidence_checks"
+                diagnostic = self._completed_jobs.get(phase)
+                if diagnostic is not None:
+                    failure.submission_state = SubmissionState.SUBMITTED
+                    failure.job_id = diagnostic.job_id
+                    failure.billed_bytes = diagnostic.billed_bytes
+            # Preserve diagnostic context and the completed analysis separately.
+            failure.analysis_submission_state = SubmissionState.SUBMITTED
+            failure.analysis_job_id = completed.job_id
+            failure.analysis_billed_bytes = completed.billed_bytes
+            raise failure from None
 
     def run(self, plan: AnalysisPlan, user_id: str) -> Evidence:
         if not isinstance(plan, AnalysisPlan) or not isinstance(user_id, str):

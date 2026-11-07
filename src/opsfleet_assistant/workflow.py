@@ -14,11 +14,14 @@ from langgraph.graph import END, START, StateGraph
 
 from .bigquery_adapter import BigQueryTurn, ExecutionError, QueryLimits
 from .compiler import CompiledQuery, compile_plan
+from .recovery import FailureContext, SubmissionState, decide_recovery, terminal_outcome
 from .config import ROOT, Settings
-from .deletion import parse_deletion
+from .report_text import render_v1 as _render, ReportTextContract
+from .deletion import parse_deletion, DeletionPreview, DeletionTarget
+from .navigation import NavigationFailure
 from .contracts import (AnalysisPlan, CohortOrigin, Dimension, Metric, Operation,
                         InterpretationResult, ResolvedRequest, RequestSpec, Mode as RequestMode)
-from .evidence import Evidence
+from .evidence import Evidence, protected_unavailable, PROTECTED_UNAVAILABLE_TEXT
 from .presentation import display_payload
 from .conversation import (AnalysisSnapshot, ConversationContext, SafeMessage, history, model_context, safe_spec, validate_cached_evidence, validate_snapshot_request, PendingTemporalResolution, request_role_anchors)
 from .privacy import FIELD_POLICY_VERSION
@@ -50,6 +53,8 @@ def _save_modifies_snapshot(interpretation, snapshot, scope, catalog, reference_
     if interpretation.clear_fields or interpretation.temporal_updates:
         return True  # Explicit reset/refresh is not an exact snapshot save.
     if proposed.mode not in {RequestMode.ANALYSIS, RequestMode.REPORT, original.mode}:
+        return True
+    if (proposed.queries or proposed.playbook is not None) and proposed.playbook != original.playbook:
         return True
     if proposed.report is not None and proposed.report != report_spec(snapshot.request):
         return True
@@ -93,7 +98,9 @@ SCHEMA_HELP = (
     "traffic source). Orders join to items by order ID, items to products by "
     "product ID, and orders to users by customer ID. Supported analyses include "
     "scoped revenue, customer ranking, monthly trends, product comparison, "
-    "aggregate demographics, and inactivity churn. Names, contact details, "
+    "aggregate demographics, and inactivity churn. Investigations: product revenue price/volume; "
+    "state qualifying-purchaser spend frequency/order value; two-cutoff inactivity churn with safe country attribution. "
+    "These measured components do not establish causes. Names, contact details, "
     "addresses, exact coordinates, and demographic membership IDs are unavailable."
 )
 
@@ -104,7 +111,7 @@ SAFE_ERROR_CODES = frozenset({
     "demographic_membership_blocked", "demographic_membership_violation", "direct_failure",
     "direct_transient", "direct_unconfigured", "dry_run_limit", "empty_model_output",
     "evidence_scope_mismatch", "idempotency_conflict", "incomplete_comparison",
-    "instruction_attack_blocked", "invalid_catalog", "invalid_identity_config", "invalid_job_metadata",
+    "instruction_attack_blocked", "internal_failure", "invalid_catalog", "invalid_identity_config", "invalid_job_metadata",
     "invalid_model_json", "invalid_interpretation_contract", "invalid_parameter", "invalid_plan_contract", "invalid_proposal",
     "invalid_question", "invalid_report_contract", "invalid_request", "invalid_result_contract",
     "invalid_selector", "job_byte_limit", "missing_project", "model_request_limit",
@@ -117,7 +124,7 @@ SAFE_ERROR_CODES = frozenset({
     "result_null_violation", "result_or_billing_limit", "result_schema_violation", "result_scope_violation",
     "result_type_violation", "saved_scope_changed", "scope_changed_start_new_conversation",
     "selection_too_broad", "store_unavailable", "timeout_cancellation_requested", "truncated_model_output",
-    "turn_byte_limit", "turn_timeout", "unauthorized_brand", "unauthorized_scope",
+    "turn_byte_limit", "turn_timeout", "warehouse_timeout", "unauthorized_brand", "unauthorized_scope",
     "unknown_identity", "unsafe_report_text", "unsafe_result_text", "unsupported_cohort_reference",
     "unsupported_operation", "unsupported_recommendation", "unsupported_request", "untrusted_compiled_query",
 })
@@ -150,6 +157,7 @@ class TurnState(TypedDict, total=False):
     golden: Selection | None
     golden_status: str
     empty_diagnosis: str | None
+    report_text_contract: ReportTextContract
     contextual_only: bool
     resolution_role_anchors: dict
 
@@ -172,9 +180,18 @@ class TurnResult:
     golden_trio_id: str | None = None
     golden_method: str | None = None
     error_category: str | None = None
+    failure_stage: str = "unknown"
+    failure_purpose: str = "unknown"
+    analysis_submission_state: str = "unknown"
+    analysis_job_id: str | None = None
+    analysis_billed_bytes: int | None = None
+    failure_submission_state: str = "unknown"
+    failure_job_id: str | None = None
+    failure_billed_bytes: int | None = None
     interpretation_status: str | None = None
     resolved_periods: dict[str, Any] | None = None
     factual_status: str | None = None
+    driver_finding: dict | None = None
     factual_findings: tuple[dict[str, Any], ...] = ()
     suggestions: tuple[dict[str, Any], ...] = ()
     report_completeness: str | None = None
@@ -182,93 +199,13 @@ class TurnResult:
     presentation: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class DeletionTurnResult(TurnResult):
+    confirmation: DeletionPreview | None = None
+
+
 def _validate_draft(draft: ReportDraft, evidence: tuple[Evidence, ...]) -> GroundedReport:
     return ground_report(draft, evidence)
-
-
-def _render(evidence: tuple[Evidence, ...], draft: ReportDraft, draft_error: str | None,
-            *, report_requested: bool, golden_status: str = "none",
-            golden: Selection | None = None, empty_diagnosis: str | None = None,
-            resolved_request: ResolvedRequest | None = None,
-            grounded: GroundedReport | None = None) -> str:
-    grounded = grounded or ground_report(draft, evidence, fallback=bool(draft_error))
-    composition = compose_report(resolved_request, evidence, grounded) if report_requested and resolved_request else None
-    parts = ([composition_text(composition, grounded), ""] if composition else []) + [grounded.headline, ""]
-    if composition is None:
-        for index, finding in enumerate(grounded.findings, 1):
-            parts.append(f"F{index}: {finding.text}")
-    parts.append(f"Factual findings: {grounded.factual_status}; selection: {grounded.selection_status}.")
-    if resolved_request:
-        request = resolved_request
-        metrics = ", ".join(dict.fromkeys(q.metric.value for q in request.spec.queries))
-        parts.append(f"Interpreted metrics: {metrics}; analysis UTC [{request.analysis.start}, {request.analysis.end}).")
-        for role in ("comparison", "action"):
-            period = getattr(request, role)
-            if period:
-                parts.append(f"{role.capitalize()} period UTC [{period.start}, {period.end})." +
-                             (" Recommendation horizon only; no future results queried or asserted." if role == "action" else ""))
-        defaults = ", ".join(source.field for source in request.spec.sources if source.origin == "default")
-        if defaults:
-            parts.append(f"Documented defaults applied: {defaults}.")
-    if golden is not None:
-        parts.append(f"Golden Knowledge: synthetic authored {golden.trio_id} v{golden.version} selected; {golden.summary} Fresh scoped warehouse evidence supplies all figures.")
-    elif golden_status in {"no_match", "outage"}:
-        parts.append("Golden Knowledge: no compatible approved example available; using the supported analysis path.")
-    if empty_diagnosis:
-        parts.append("Empty-result diagnosis: " + ("No matching scoped source data for this request." if empty_diagnosis == "valid_empty"
-                                                 else "No matching data was released; diagnosis could not finish within the remaining budget."))
-    for i, item in enumerate(evidence, 1):
-        parts.append(f"Evidence E{i}: {item.operation.value}; period {item.period_utc or item.metric_definition.get('cutoff_date')}; "
-                     f"scope {item.scope_reference} version {item.scope_version}; job {item.job_id}; "
-                     f"coverage job {item.coverage.job_id}.")
-        execution_scope = getattr(item, "execution_scope", None)
-        if execution_scope is not None:
-            brands = json.dumps(execution_scope.brands, ensure_ascii=False)
-            products = (json.dumps(execution_scope.product_ids) if execution_scope.product_ids is not None
-                        else "all products within these brands")
-            parts.append(f"Scope filters for E{i}: brands {brands}; product IDs {products}.")
-        else:
-            parts.append(f"Scope filters for E{i}: unavailable in this evidence's metadata.")
-        if empty_diagnosis and (item.coverage.period_rows == 0 or not item.rows):
-            parts.append("  No matching data; aggregate zero is not treated as an observed result.")
-        elif item.rows:
-            show_table = composition is None or any(s.kind == "performance_table" for s in composition.sections)
-            if show_table:
-                rows = item.rows[:2] if composition and composition.spec.detail == "concise" else item.rows
-                if composition and composition.spec.presentation == "table":
-                    parts.append("  " + " | ".join(item.columns))
-                    parts.extend("  " + " | ".join(str(row.get(key)) for key in item.columns) for row in rows)
-                else:
-                    for row in rows:
-                        parts.append("  " + ", ".join(f"{key}={value}" for key, value in row.items()))
-                if len(rows) < len(item.rows):
-                    parts.append("  Additional released rows are retained in evidence; concise display only.")
-        else:
-            parts.append("  No qualifying rows.")
-        parts.append(f"Definitions for E{i}: {json.dumps(item.metric_definition, sort_keys=True)}")
-        parts.append(f"Completeness: {'complete' if item.complete else 'incomplete'} — {item.completeness_note}")
-        parts.append(f"Coverage: {item.coverage.note} Latest scoped item: {item.coverage.latest_item_at_utc or 'unknown'}; query as of {item.query_as_of_utc}.")
-    for hypothesis in grounded.hypotheses:
-        parts.append(f"Hypothesis (unverified): {hypothesis.text}")
-    if grounded.recommendations and composition is None:
-        label = action_heading(resolved_request)
-        parts.append(label + " (recommendations, not observed outcomes):")
-        for action in grounded.recommendations:
-            parts.append(f"  {action.text}")
-    if draft_error or grounded.selection_status == "refused":
-        parts.append("Model explanation unavailable; checked evidence and supported deterministic findings are shown above. "
-                     "No model-selected actions were released.")
-    if not evidence:
-        return "\n".join(parts)
-    definitions = evidence[0].metric_definition
-    statuses = ", ".join(definitions.get("revenue_statuses", ()))
-    days = definitions.get("inactivity_days", 90)
-    parts.append(f"Definitions: revenue sums non-null item sale prices for {statuses}; "
-                 "other statuses and null-priced items are excluded. UTC item creation time uses an inclusive start and "
-                 f"exclusive end. Processing, when included, is an analysis convention, not an accounting-recognition claim. "
-                 f"Churn is {days}-day inactivity among prior purchasers in the effective brands. "
-                 "Demographics are aggregate-only with at least five customers per released group.")
-    return "\n".join(parts)
 
 
 def _scope_digest(queries: tuple[CompiledQuery, ...]) -> str:
@@ -319,8 +256,11 @@ class AssistantWorkflow:
                                           conversation_id, turn_id)
                     value = supplied_conversation if command.selector == "conversation" else command.value
                     assert value is not None
+                    from .report_service import ReportService
+                    preview_service = ReportService.from_workflow(self)
                     preview = self.store.preview_deletion(owner, command.selector, value,
-                                                          conversation_id=supplied_conversation)
+                        conversation_id=supplied_conversation,
+                        disclosure_check=preview_service.authorize_preview)
                     if not preview["targets"]:
                         trace.emit("deletion", decision="no_targets", status="ok", count=0)
                         return TurnResult("ok", "No active owned reports match. Nothing was deleted; no proposal was created." + boundary,
@@ -336,7 +276,10 @@ class AssistantWorkflow:
                                   f"To cancel: cancel {preview['token']}",
                                   "Deletion is soft: reports disappear from active use immediately, but bytes remain in SQLite pending a separate retention/purge policy." + boundary])
                     trace.emit("deletion", decision="previewed", status="confirmation_required", count=len(preview["targets"]))
-                    return TurnResult("confirmation_required", "\n".join(lines), conversation_id, turn_id)
+                    return DeletionTurnResult("confirmation_required", "\n".join(lines), conversation_id, turn_id,
+                        query_executions=preview_service.query_executions, billed_bytes=preview_service.billed_bytes,
+                        confirmation=DeletionPreview(owner, conversation_id, preview["token"], preview["expires_at"],
+                            tuple(DeletionTarget(**t) for t in preview["targets"])))
                 state, ids = self.store.resolve_deletion(owner, command.value, cancel=command.action == "cancel")
                 trace.emit("deletion", decision=state if state in {"deleted", "cancelled", "stale", "expired"} else "failed",
                            status="ok" if state in {"deleted", "cancelled"} else "error", count=len(ids))
@@ -353,11 +296,15 @@ class AssistantWorkflow:
                 else:
                     message = "No active deletion proposal matches this token and identity. Nothing was deleted."
                 return TurnResult("error", message + boundary, conversation_id, turn_id)
-            except StoreFailure as exc:
+            except (StoreFailure, NavigationFailure) as exc:
                 trace.emit("deletion", decision="failed", status="error", category="storage")
                 message = ("Selection is too broad; narrow the request." if exc.code == "selection_too_broad"
+                           else "Unable to verify report access for this preview. Nothing was disclosed or deleted."
+                           if isinstance(exc, NavigationFailure)
                            else "Unable to complete report deletion: local state store unavailable.")
-                return TurnResult("error", message + boundary, conversation_id, turn_id)
+                return TurnResult("error", message + boundary, conversation_id, turn_id, error_category=exc.code,
+                    query_executions=preview_service.query_executions if "preview_service" in locals() else 0,
+                    billed_bytes=preview_service.billed_bytes if "preview_service" in locals() else 0)
         reference_date = self.today or datetime.now(timezone.utc).date()
         budget = ModelBudget()
         budget.telemetry = trace
@@ -410,35 +357,11 @@ class AssistantWorkflow:
                 bq.telemetry = trace
                 catalog = bq.load_catalog()
                 scope = resolve_demo_scope(owner, catalog)
-                if scope.authorization_version != reused["scope_version"] or not reused["plans"]:
-                    raise PolicyError("saved_scope_changed")
-                current_queries = tuple(compile_plan(AnalysisPlan.model_validate(raw), scope, catalog)
-                                        for raw in reused["plans"])
-                if _scope_digest(current_queries) != reused["scope_digest"]:
-                    raise PolicyError("saved_scope_changed")
-                stored_grounded = GroundedReport.model_validate(reused["grounded_report"]) if reused.get("grounded_report") else None
-                fields = reused["fields"]
-                durable = bool(fields["report_support_json"] or fields["report_binding_digest"])
-                stored_composition = None
-                if durable:
-                    if (not fields["report_support_json"] or not fields["report_binding_digest"]
-                            or artifact_binding_digest(fields) != fields["report_binding_digest"]):
-                        raise StoreFailure("invalid_result_contract")
-                    artifact = ReportArtifact.model_validate_json(fields["report_support_json"])
-                    stored_composition = ReportComposition.model_validate(reused["report_composition"])
-                    validate_artifact(fields, artifact, stored_composition, stored_grounded)
-                    for query, item in zip(current_queries, artifact.snapshot.evidence):
-                        if (item.metric_definition != query.metric_definition or item.columns != query.result_contract.columns
-                                or item.scope_reference != f"demo:{owner}" or item.scope_version != query.scope_version
-                                or item.field_policy_version != FIELD_POLICY_VERSION
-                                or item.execution_scope is None or item.execution_scope.brands != query.effective_brands
-                                or item.execution_scope.product_ids != query.requested_product_ids):
-                            raise StoreFailure("invalid_result_contract")
-                        validate_cached_evidence(query, item)
-                else:
-                    # Pre-binding artifacts retain exact content. Missing durable
-                    # support cannot verify new composition or completeness.
-                    reused["report_completeness"] = "legacy"
+                from .saved_report import validate_saved_report
+                checked = validate_saved_report(reused["fields"], scope, catalog, field_policy_version=FIELD_POLICY_VERSION)
+                artifact, stored_grounded, stored_composition = checked.artifact, checked.grounded, checked.composition
+                durable = artifact is not None
+                reused["report_completeness"] = checked.completeness
                 return TurnResult("partial" if reused["report_completeness"] == "partial" or reused["content"].startswith("Partial report:") else "ok", reused["content"], conversation_id, turn_id,
                                   query_executions=bq.executions, billed_bytes=bq.billed_bytes,
                                   evidence_job_ids=tuple(ref["job_id"] for ref in reused["evidence_refs"]),
@@ -450,6 +373,7 @@ class AssistantWorkflow:
                                   resolved_periods={role: getattr(stored_composition.request, role).model_dump(mode="json")
                                       if getattr(stored_composition.request, role) else None
                                       for role in ("analysis", "comparison", "action")} if stored_composition else None,
+                                  driver_finding=stored_grounded.driver.model_dump(mode="json") if stored_grounded and stored_grounded.driver else None,
                                   factual_status=stored_grounded.factual_status if stored_grounded else None,
                                   factual_findings=tuple(f.model_dump(mode="json") for f in stored_grounded.findings) if stored_grounded else (),
                                   suggestions=tuple({"kind": kind, **s.model_dump(mode="json")} for kind in ("recommendations", "hypotheses")
@@ -468,9 +392,9 @@ class AssistantWorkflow:
                 messages = history(messages, max_messages=self.settings.history_max_messages,
                                    max_chars=self.settings.history_max_chars)
                 demographic = cohort == CohortOrigin.DEMOGRAPHIC
-                if pending and any(q.operation == Operation.DEMOGRAPHIC_COMPARISON for q in pending.queries):
+                if pending and any(q.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE} for q in pending.queries):
                     demographic = True
-                if snapshot and any(p.operation == Operation.DEMOGRAPHIC_COMPARISON for p in snapshot.plans):
+                if snapshot and any(p.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE} for p in snapshot.plans):
                     demographic = True
                 return ConversationContext(owner=owner, identity_digest=identity_digest,
                     authorization_version=active_scope.authorization_version, catalog_digest=catalog_digest,
@@ -557,6 +481,8 @@ class AssistantWorkflow:
                                     raise
                             # Recompute trusted W3 sentences from typed selections, never report prose.
                             checked = reconstruct_grounded(snapshot)
+                            if checked.driver != snapshot.grounded.driver:
+                                raise PolicyError("saved_scope_changed")
                             context = context.model_copy(update={"snapshot": snapshot.model_copy(update={"grounded": checked})})
                 # Exact catalog-name screening is an authorization defense, not an intent parser.
                 for brand in catalog.brands:
@@ -673,6 +599,8 @@ class AssistantWorkflow:
                                 new = new.model_copy(update=inherited)
                                 interpretation = interpretation.model_copy(update={"request": new})
                             if interpretation.context_action != "correct":
+                                if new.playbook != old.playbook:
+                                    raise PolicyError("plan_intent_mismatch")
                                 if new.purpose != old.purpose:
                                     raise PolicyError("plan_intent_mismatch")
                                 if new.mode != old.mode and new.mode != Mode.TEMPORAL_COMPARE:
@@ -715,7 +643,7 @@ class AssistantWorkflow:
                             previous_plan=state.get("previous_plan"), role_anchors=anchors,
                             effective_query_brands=tuple(effective_brands(scope, q.requested_brands, catalog)
                                 for q in interpretation.request.queries) if interpretation.request else None)
-                        if resolved and resolved.comparison and resolved.spec.mode not in {Mode.REPORT, Mode.TEMPORAL_COMPARE, Mode.CHURN_COMPARE}:
+                        if resolved and resolved.comparison and not (resolved.spec.playbook and resolved.spec.playbook.id == "churn_change") and resolved.spec.mode not in {Mode.REPORT, Mode.TEMPORAL_COMPARE, Mode.CHURN_COMPARE}:
                             interpretation = interpretation.model_copy(update={"status": "needs_clarification", "issues": ("unresolved_interpretation",)})
                         if resolved and interpretation.status == "ready":
                             # Validate operation combinations now, before any analytical query or retrieval.
@@ -782,6 +710,7 @@ class AssistantWorkflow:
                                     "executed_plans": snapshot.plans, "queries": context_queries,
                                     "grounded_report": snapshot.grounded, "resolved_request": snapshot.request,
                                     "report_requested": goal == "save", "scope_version": scope.authorization_version,
+                                    "report_text_contract": ReportTextContract(mode="exact_save"),
                                     **({"report_composition": composition} if composition else {})}
                         elif goal == "schema_help":
                             self.store.save_continuity(owner, conversation_id, updated_context(snapshot=context.snapshot if context else None))
@@ -856,19 +785,21 @@ class AssistantWorkflow:
                 if state.get("previous_scope_version") is not None and state["previous_scope_version"] != scope.authorization_version:
                     raise PolicyError("scope_changed_start_new_conversation")
                 queries = []
-                for plan_item in state["plan_envelope"].plans:
+                for index, plan_item in enumerate(state["plan_envelope"].plans):
                     try:
-                        query = compile_plan(plan_item, scope, catalog)
+                        query = compile_plan(plan_item, scope, catalog,
+                            temporal_role=state["resolved_request"].spec.queries[index].temporal_role)
                         trace.emit("sql_validation", status="ok", operation=plan_item.operation.value,
                                    metric=plan_item.metric.value)
                     except PolicyError as exc:
                         if exc.code != "compiler_syntax_error":
                             raise
                         trace.emit("sql_validation", status="error", category="syntax")
-                        trace.emit("recovery", decision="repair", category="syntax")
-                        query = compile_plan(plan_item, scope, catalog)
-                        trace.emit("sql_validation", status="ok", operation=plan_item.operation.value,
-                                   metric=plan_item.metric.value)
+                        decision = decide_recovery(FailureContext(
+                            exc.code, "compile", SubmissionState.NOT_SUBMITTED,
+                            budget_available=True, deadline_available=True))
+                        trace.emit("recovery", action=decision.action, reason=decision.reason, outcome="unsupported")
+                        raise
                     queries.append(query)
                 return {"queries": queries, "scope_version": scope.authorization_version}
 
@@ -879,24 +810,42 @@ class AssistantWorkflow:
                 plans = list(state["plan_envelope"].plans)
 
                 def run_with_recovery(query: CompiledQuery, source_plan: AnalysisPlan) -> tuple[Evidence, CompiledQuery]:
+                    if hasattr(bq, "adopt_inspected_binding"):
+                        query = bq.adopt_inspected_binding(query, source_plan, owner)
                     try:
                         return bq.execute_compiled(query), query
                     except ExecutionError as exc:
                         if exc.category not in {"query_syntax_error", "query_schema_error"}:
                             raise
-                        kind = "syntax" if exc.category == "query_syntax_error" else "schema"
-                        trace.emit("recovery", decision="repair", category=kind)
-                        catalog = bq.refresh_catalog() if kind == "schema" else bq.load_catalog()
-                        scope = resolve_demo_scope(owner, catalog)
-                        regenerated = compile_plan(source_plan, scope, catalog)
-                        if (regenerated.effective_brands != query.effective_brands
-                                or regenerated.metric_definition != query.metric_definition
-                                or regenerated.parameters != query.parameters
-                                or regenerated.scope_version != query.scope_version):
-                            raise ExecutionError("recovery_scope_changed")
-                        trace.emit("sql_validation", status="ok", operation=source_plan.operation.value,
-                                   metric=source_plan.metric.value)
-                        return bq.execute_compiled(regenerated), regenerated
+                        available = hasattr(bq, "correct_schema_binding")
+                        remaining = bq.recovery_available() if available else True
+                        decision = decide_recovery(FailureContext(
+                            exc.category, exc.stage,
+                            SubmissionState.SUBMITTED if exc.analysis_submission_state == SubmissionState.SUBMITTED else exc.submission_state,
+                            budget_available=remaining, deadline_available=budget.remaining() > 0,
+                            schema_inspection_available=available))
+                        if decision.action != "inspect_schema":
+                            if not exc.recovery_recorded:
+                                trace.emit("recovery", action=decision.action, reason=decision.reason, outcome=terminal_outcome(decision))
+                            raise
+                        trace.emit("recovery", action=decision.action, reason=decision.reason, outcome="attempted")
+                        try:
+                            corrected = bq.correct_schema_binding(query, source_plan, owner)
+                            trace.emit("sql_validation", status="ok", operation=source_plan.operation.value,
+                                       metric=source_plan.metric.value)
+                            trace.emit("recovery", action="recompile_supported_binding", reason="binding_changed", outcome="attempted")
+                            item = bq.execute_compiled(corrected)
+                        except (ExecutionError, PolicyError) as failure:
+                            terminal = decide_recovery(FailureContext(
+                                getattr(failure, "category", getattr(failure, "code", "unknown")),
+                                getattr(failure, "stage", "unknown"),
+                                SubmissionState.SUBMITTED if getattr(failure, "analysis_submission_state", "unknown") == "submitted"
+                                else getattr(failure, "submission_state", SubmissionState.UNKNOWN),
+                                budget_available=bq.recovery_available(), deadline_available=budget.remaining() > 0))
+                            if not getattr(failure, "recovery_recorded", False):
+                                trace.emit("recovery", action="stop", reason=terminal.reason, outcome=terminal_outcome(terminal))
+                            raise
+                        return item, corrected
 
                 evidence = []
                 for index, query in enumerate(queries):
@@ -921,6 +870,10 @@ class AssistantWorkflow:
                         plans.append(second)
                 diagnosis = None
                 for index, item in enumerate(evidence):
+                    if protected_unavailable(item):
+                        diagnosis = "unavailable"
+                        trace.emit("empty_result", decision="unavailable", operation=item.operation.value)
+                        continue
                     empty = (not item.rows or item.coverage.period_rows == 0
                              or item.operation == Operation.CHURN_SNAPSHOT and item.rows[0].get("eligible_customers") == 0)
                     if not empty:
@@ -928,22 +881,8 @@ class AssistantWorkflow:
                     diagnosis = "valid_empty"
                     trace.emit("empty_result", decision="source_empty" if item.coverage.source_rows == 0 else "valid_empty",
                                operation=item.operation.value)
-                    if item.coverage.source_rows == 0 and item.coverage.period_rows == 0:
-                        try:
-                            refreshed = bq.refresh_catalog()
-                            new_scope = resolve_demo_scope(owner, refreshed)
-                            rebuilt = compile_plan(plans[index], new_scope, refreshed)
-                            if (rebuilt.effective_brands != queries[index].effective_brands
-                                    or rebuilt.parameters != queries[index].parameters
-                                    or rebuilt.scope_version != queries[index].scope_version):
-                                raise ExecutionError("recovery_scope_changed")
-                            trace.emit("recovery", decision="diagnostic", category="metadata")
-                            evidence[index], queries[index] = run_with_recovery(rebuilt, plans[index])
-                            if evidence[index].coverage.period_rows:
-                                diagnosis = None
-                        except (ExecutionError, PolicyError):
-                            diagnosis = "incomplete"
-                            trace.emit("empty_result", decision="stop", category="budget")
+                    if not item.rows and item.coverage.period_rows:
+                        raise ExecutionError("coverage_invalid")
                 return {"evidence": tuple(evidence), "queries": tuple(queries),
                         "executed_plans": tuple(plans), "empty_diagnosis": diagnosis}
 
@@ -981,10 +920,17 @@ class AssistantWorkflow:
                     # Require the paired trusted calculation, preserving valid selected actions.
                     if not paired_coverage(grounded.findings, state["evidence"]) and not state["report_requested"]:
                         raise PolicyError("incomplete_comparison")
+                if grounded.driver:
+                    trace.emit("playbook", playbook_id=grounded.driver.playbook_id, version=grounded.driver.method_version,
+                               stage="claim_validation", status="complete" if grounded.driver.complete else "partial",
+                               availability_reason=grounded.driver.availability_reason)
                 if state["report_requested"]:
                     grounded = apply_report_preferences(state["resolved_request"],grounded)
                 composition = compose_report(state["resolved_request"], state["evidence"], grounded) if state["report_requested"] else None
                 return {"grounded_report": grounded,
+                        "report_text_contract": ReportTextContract.capture(
+                            golden_status=state.get("golden_status", "none"), golden=state.get("golden"),
+                            empty_diagnosis=state.get("empty_diagnosis")),
                         **({"report_composition": composition} if composition else {}), "content": _render(state["evidence"], draft, draft_error,
                                            report_requested=state["report_requested"],
                                            golden_status=state.get("golden_status", "none"),
@@ -1007,7 +953,7 @@ class AssistantWorkflow:
                         evidence=state["evidence"], request=state["resolved_request"], grounded=state["grounded_report"])
                 continuity = updated_context(snapshot=snapshot, preserve_expiry=bool(state.get("contextual_only")
                     or context and context.pending and state["interpretation"].context_action in {"continue", "correct"}))
-                cohort_origin = (CohortOrigin.DEMOGRAPHIC if any(p.operation == Operation.DEMOGRAPHIC_COMPARISON for p in state["executed_plans"])
+                cohort_origin = (CohortOrigin.DEMOGRAPHIC if any(p.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE} for p in state["executed_plans"])
                                  else CohortOrigin.BUSINESS)
                 if not state["report_requested"]:
                     if not state.get("contextual_only"):
@@ -1022,7 +968,9 @@ class AssistantWorkflow:
                     content=state["content"],
                     grounded_report=state["grounded_report"].model_dump(mode="json"),
                     continuity=continuity,
-                    report_support=ReportArtifact(snapshot=snapshot.model_copy(update={"report_id": None})).model_dump(mode="json"),
+                    report_support=ReportArtifact(schema_version=2 if snapshot.schema_version == 3 else 1,
+                        snapshot=snapshot.model_copy(update={"report_id": None}),
+                        rendering=state["report_text_contract"]).model_dump(mode="json"),
                     report_completeness=state["report_composition"].completeness,
                     report_composition=state["report_composition"].model_dump(mode="json"),
                     metric_definitions=[item.metric_definition for item in evidence],
@@ -1089,6 +1037,7 @@ class AssistantWorkflow:
                                   context_goal=interpretation.request.intent if final.get("contextual_only") else None) if final.get("evidence") else None,
                               report_completeness=final["report_composition"].completeness if final.get("report_composition") else None,
                               report_composition=final["report_composition"].model_dump(mode="json") if final.get("report_composition") else None,
+                              driver_finding=final["grounded_report"].driver.model_dump(mode="json") if final.get("grounded_report") and final["grounded_report"].driver else None,
                               factual_status=final["grounded_report"].factual_status if final.get("grounded_report") else None,
                               factual_findings=tuple(f.model_dump(mode="json") for f in final["grounded_report"].findings) if final.get("grounded_report") else (),
                               suggestions=tuple({"kind": kind, **s.model_dump(mode="json")} for kind in ("recommendations", "hypotheses")
@@ -1096,21 +1045,30 @@ class AssistantWorkflow:
         except (PolicyError, ExecutionError, ModelFailure, StoreFailure) as exc:
             code = getattr(exc, "code", None) or getattr(exc, "category", None) or "store_unavailable"
             code = code if isinstance(code, str) and code in SAFE_ERROR_CODES else "internal_failure"
-            category = ("syntax" if "syntax" in code else "schema" if "schema" in code
+            category = ("internal" if isinstance(exc, ExecutionError) and exc.kind == "internal"
+                        else "syntax" if "syntax" in code else "schema" if "schema" in code
                         else "budget" if any(word in code for word in ("limit", "timeout", "billing"))
                         else "storage" if isinstance(exc, StoreFailure) else "provider" if isinstance(exc, (ExecutionError, ModelFailure))
                         else "policy")
             trace.emit("stage", stage=active_stage, status="error", category=category)
             if active_stage == "display_save":
                 trace.emit("report_persistence", decision="failed", status="error", category="storage")
-            return TurnResult("error", f"Unable to complete this request: {code}.", conversation_id, turn_id,
+            return TurnResult("error", f"Unable to complete this request: {code}." + (" Correction is unavailable; no broader query was run. Please report this query defect." if code in {"query_schema_error", "query_syntax_error", "compiler_syntax_error"} else ""), conversation_id, turn_id,
                               tuple(budget.routes), budget.requests,
                               bq.executions if bq else 0,
                               None if bq is not None and getattr(bq, "billing_unknown", False) else bq.billed_bytes if bq else 0,
                               golden_status=golden_marker,
                               golden_trio_id=selected_golden.trio_id if selected_golden else None,
                               golden_method=selected_golden.method if selected_golden else None,
-                              error_category=category)
+                              error_category=category,
+                              failure_stage=getattr(exc, "stage", "unknown") if getattr(exc, "stage", "unknown") in {"dry_run", "execute", "metadata", "compile", "evidence_checks"} else "unknown",
+                              failure_purpose=getattr(exc, "purpose", "unknown") if getattr(exc, "purpose", "unknown") in {"catalog", "analysis", "coverage", "customer_check", "evidence_checks"} else "unknown",
+                              analysis_submission_state=getattr(exc, "analysis_submission_state", SubmissionState.UNKNOWN),
+                              analysis_job_id=getattr(exc, "analysis_job_id", None),
+                              analysis_billed_bytes=getattr(exc, "analysis_billed_bytes", None),
+                              failure_submission_state=getattr(exc, "submission_state", SubmissionState.UNKNOWN),
+                              failure_job_id=getattr(exc, "job_id", None),
+                              failure_billed_bytes=getattr(exc, "billed_bytes", None))
         except Exception:
             trace.emit("stage", stage=active_stage, status="error", category="internal")
             return TurnResult("error", "Unable to complete this request: internal_failure.",
