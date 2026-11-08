@@ -1,0 +1,74 @@
+{
+  "version": "independent-oracle-v1",
+  "tolerance": "1e-9 (SQLite division); exact integer and Decimal assertions elsewhere",
+  "sources": "source_rows.json profiles; authored row constructors from tests/playbook_source.py",
+  "product": {
+    "qualifying_revenue": [
+      1000,
+      600
+    ],
+    "qualifying_items": [
+      100,
+      50
+    ],
+    "difference": "400",
+    "volume": "550",
+    "price": "-150"
+  },
+  "regional": {
+    "purchasers": [
+      100,
+      50
+    ],
+    "orders": [
+      200,
+      50
+    ],
+    "revenue": [
+      10000,
+      4000
+    ],
+    "spend": [
+      100,
+      80
+    ],
+    "difference": "20",
+    "frequency": "65",
+    "order_value": "-45"
+  },
+  "churn": {
+    "baseline_eligible": [
+      600,
+      400
+    ],
+    "baseline_inactive": [
+      60,
+      80
+    ],
+    "current_eligible": [
+      600,
+      600
+    ],
+    "current_inactive": [
+      120,
+      180
+    ],
+    "rates": [
+      ".14",
+      ".25"
+    ],
+    "difference": ".11",
+    "mix": ".01",
+    "within": ".10"
+  },
+  "basic": {
+    "fixture": "evaluation_fixtures.py standard profile",
+    "q1_2025_authorized_revenue": "30",
+    "excluded_mixed_basket_revenue": "90",
+    "null_and_cancelled_excluded": true
+  },
+  "empty": {
+    "profile": "empty",
+    "expected": "No measured zero from a genuinely empty population"
+  }
+}

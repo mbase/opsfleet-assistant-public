@@ -75,9 +75,9 @@ class TurnTrace:
             "turn_id": self.turn_id, "event": event,
         }
         for key, value in fields.items():
-            if key in {'failure_code','finish_category','content_availability'}:
-                from .model_gateway import FAILURE_CODES, FINISH_CATEGORIES, CONTENT_AVAILABILITY
-                allowed={'failure_code':FAILURE_CODES,'finish_category':FINISH_CATEGORIES,
+            if key in {'failure_stage','failure_code','finish_category','content_availability'}:
+                from .model_gateway import FAILURE_CODES, FAILURE_STAGES, FINISH_CATEGORIES, CONTENT_AVAILABILITY
+                allowed={'failure_stage':FAILURE_STAGES,'failure_code':FAILURE_CODES,'finish_category':FINISH_CATEGORIES,
                     'content_availability':CONTENT_AVAILABILITY}[key]
                 record[key]=value if isinstance(value,str) and value in allowed else 'unknown'
             elif key == 'failure_kind':

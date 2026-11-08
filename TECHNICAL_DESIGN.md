@@ -20,7 +20,7 @@
 | pytest + injected fakes + opt-in BigQuery tests | Deterministic policy, lifecycle, recovery and CLI coverage with separate bounded live evidence | Fakes cannot prove source behavior; live public data is mutable. Separate independent reference fixtures are still needed for broader numerical certification |
 | Local JSONL telemetry | Best-effort sanitized event trail and low-cardinality local counters | Not durable, managed, tamper-resistant or suitable as a production audit trail; production design exports to managed telemetry |
 
-Dependencies are pinned in `pyproject.toml`; `requirements.txt` installs the editable project. Python bounds are `>=3.12,<3.14`. The optional `privacy` extra installs Presidio, but deterministic field/PII rules are primary and Presidio runtime availability was not verified.
+Direct dependencies are pinned in `pyproject.toml`; the supported Part 5 editable runtime/test route additionally uses `requirements.part5.lock` and a pinned backend without build isolation. `requirements.txt` remains a convenience entry; `requirements.step4.lock` is historical. Python bounds are `>=3.12,<3.14`. The optional `privacy` extra installs Presidio, but deterministic field/PII rules are primary and Presidio runtime availability was not verified.
 
 ## 2. Source schema, grain and metrics
 
@@ -359,3 +359,17 @@ Released evidence contributes only safe completed-analysis job/byte provenance t
 Transactions remain in `SQLiteStore`: `save_turn_report` atomically validates/persists report support, links the snapshot and updates continuity; deletion preview binds an authorized exact target/version set within selection, and `resolve_deletion` rechecks/consumes it atomically. Non-report legacy context and continuity writes keep their original behavior. No transaction spans graph nodes, and formatting helpers acquire no side effects.
 
 Fresh before/after evidence, checkpoint commands, new boundary tests, preservation and limits are recorded in [Part 4 implementation report](docs/PART_4_IMPLEMENTATION_REPORT.md). Offline equivalence does not establish live provider/warehouse behavior, general syntax self-correction, production authentication, human usability, clean installation or Part 5 completion.
+
+
+## Part 5 validation boundary
+
+The current evaluation entry points are adapted with an explicit versioned manifest path; their historical defaults/manifests retain their identities. `evaluation_part5.py` coordinates the existing `evaluation_runner.execute`, durable `Accounting`, provider observer and guarded warehouse transport. It does not alter the product workflow, calculations, permissions or store transactions. Synthetic snapshot loading extends the existing fixture client.
+
+A new candidate freeze records baseline HEAD/tree plus current executable/config/test/fixture hashes, tracked application diff hash, dependency metadata/constraints, prompts/policy, persisted/rendering versions and scenario/driver hashes. It explicitly identifies uncommitted inputs; narrative reports/generated outputs are excluded to avoid recursive hashes. Real model/warehouse execution needs an owner-reviewed manifest, explicit opt-in/confirmation and complete environment. The preparation agent never executes it. Calls/jobs/bytes/time are bounded before dispatch, provider price reservations stop scheduling when exhausted/unknown, and per-case resume never erases an attempted failure. Provider-enforced monetary guarantees require an account-side cap.
+
+For approved warehouse trials, the guarded client pins catalog, discovery, analysis, coverage and separately authored scalar/playbook oracle queries to one UTC system-time timestamp. Missing or unavailable time travel cannot fall back to mutable-source numerical acceptance. The same adapter carries reference execution/byte/deadline limits. Public projections contain statuses, boolean checks, counts and latency; capability-bearing checkpoints, observations and disposable SQLite stay in restricted temporary storage outside Git. No raw responses are retained in public results.
+
+[Validation specification](docs/validation/part5-v1/SCENARIOS.md), [commands](docs/validation/part5-v1/COMMANDS.md), [human protocol](docs/validation/part5-v1/HUMAN_PROTOCOL.md) keep numerical, interpretation, warehouse, installation and human evidence separate. Execution results and local session reports are excluded from version control; passing observations in one layer do not satisfy the other layers. Optional privacy import does not establish availability of the NLP model or scanner runtime.
+
+
+Part 5 review revisions P5-R1/R2 use semantic rubric v2 over the entire first request, with separate first-semantic and final workflow outcomes. A shared stdlib-only filesystem inventory now rejects added/missing/changed executable/config/test inputs, including root hooks and Git-ignored additions; Git trees additionally verify HEAD/tree and the tracked diff hash. The manifest terminal bootstrap performs this check before application imports. Historical candidate evidence is retained under `docs/validation/part5-v1/history/pre-review/`. These changes await independent re-review and do not authorize live trials or establish a hostile-code sandbox.

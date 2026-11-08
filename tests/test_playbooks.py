@@ -18,6 +18,7 @@ from opsfleet_assistant.store import SQLiteStore
 from opsfleet_assistant.workflow import AssistantWorkflow
 from opsfleet_assistant.presentation import render_result
 from opsfleet_assistant.model_gateway import ModelFailure
+from opsfleet_assistant.provider_contracts import encode_interpretation
 from test_step4 import SETTINGS, FakeTurn
 
 CATALOG=Catalog.from_products([{'id':1,'brand':'Calvin Klein'},{'id':2,'brand':'Carhartt'},{'id':3,'brand':'Hanes'}])
@@ -308,7 +309,7 @@ def test_gateway_injected_paraphrases_and_full_correction(tmp_path,monkeypatch,f
         gateway=GeminiGateway(SETTINGS)
         def generate(prompt,*args):
             prompts.append(prompt)
-            return InterpretationResult(status='ready',request=request).model_dump(mode='json')
+            return encode_interpretation(InterpretationResult(status='ready',request=request))
         monkeypatch.setattr(gateway,'_generate',generate)
         parsed=gateway.interpret(phrase,previous_plan=None,reference_date='2026-11-06',analytical_timezone='UTC')
         assert parsed.request.playbook==request.playbook

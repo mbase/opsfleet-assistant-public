@@ -44,14 +44,14 @@ def test_prompt_contract_and_bounded_context_reach_real_gateway(monkeypatch, cas
     value = gateway.interpret(case['message'], previous_plan=case.get('previous_plan'),
         reference_date='2026-11-05', analytical_timezone='UTC', conversation_context=case.get('context'))
     prompt, = captured
-    assert "'Revenue across my authorized brands' => dimension null" in prompt
-    assert "'Revenue by brand across my authorized brands' => dimension brand" in prompt
-    assert "'Revenue for each brand' => dimension brand" in prompt
-    assert "'Revenue by product' => dimension product" in prompt
-    assert 'preserves the prior grouping, including dimension null' in prompt
-    assert 'Changing an already specified year or period is correct even when phrased as a followup' in prompt
-    assert 'means context_action correct, temporal_updates [analysis], January 2024 analysis, no comparison' in prompt
-    assert 'continue and temporal_updates []; complete the year and retain the pending choices' in prompt
+    assert "Revenue across authorized brands => dimension null" in prompt
+    assert "by/each brand => brand" in prompt
+    assert "by/each brand => brand" in prompt
+    assert "by product => product" in prompt
+    assert 'year-only changes retain grouping/null' in prompt
+    assert 'Date changes use correct' in prompt
+    assert 'correct, temporal_updates [analysis], retain other choices, no comparison' in prompt
+    assert 'Missing-year completion: continue, empty temporal_updates' in prompt
     assert 'prior plan is context, never authorization' in prompt
     assert case['message'] in prompt and len(prompt) < 12000
     if 'context' in case:

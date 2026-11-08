@@ -1,0 +1,130 @@
+{
+  "version": "part5-offline-matrix-v1",
+  "layer": "deterministic_offline",
+  "selection": "Full offline suite; families overlap and are not summed as independent cases",
+  "required_families": [
+    {
+      "id": "basic-revenue-ranking-trend-schema-empty",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_step2.py",
+        "tests/test_step3.py",
+        "tests/test_step6.py",
+        "tests/test_evaluation_preparation.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "missing-year-period-status-restart-expiry",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_conversation_flows.py",
+        "tests/test_continuation_correctness.py",
+        "tests/test_period_resolution.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "playbooks-independent-source-arithmetic",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_playbooks.py",
+        "tests/test_playbook_source.py",
+        "tests/test_part5_validation.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "playbooks-invalid-premise-zero-nearzero-incomplete-privacy",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_playbooks.py",
+        "tests/test_playbook_source.py",
+        "tests/test_part2_review_fixes.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "report-create-exact-save-changed-save-transaction",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_exact_save_oracle.py",
+        "tests/test_modified_save_guard.py",
+        "tests/test_save_interpretation_repair.py",
+        "tests/test_conversation_flows.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "report-restart-read-pagination-legacy-corrupt",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_part3_navigation.py",
+        "tests/test_part3_review_fixes.py",
+        "tests/test_report_schema_compatibility.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "delete-literal-conversation-cancel-confirm-owner-stale-expiry-replay-atomic",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_step5.py",
+        "tests/test_part3_confirmation.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "security-unauthorized-brand-product-itemgrain-pii-malicious",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_step2.py",
+        "tests/test_step4.py",
+        "tests/test_step6.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "security-saved-scope-revocation",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_part3_navigation.py",
+        "tests/test_conversation_flows.py",
+        "tests/test_continuation_correctness.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "recovery-transient-supported-correction-persistent-ambiguous-budget",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_recovery_1a.py",
+        "tests/test_recovery_1b.py",
+        "tests/test_part1_review_fixes.py",
+        "tests/test_part4_boundaries.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "cli-normal-narrow-markup-control-json-errors-nextsteps",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_executive_output.py",
+        "tests/test_part3_navigation.py",
+        "tests/test_part3_review_fixes.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    },
+    {
+      "id": "part5-runner-manifest-caps-oracles-fake-transports",
+      "mandatory": true,
+      "selectors": [
+        "tests/test_part5_validation.py",
+        "tests/test_evaluation_budget_provenance.py",
+        "tests/test_evaluation_review_regressions.py",
+        "tests/test_full_validation_driver.py"
+      ],
+      "expected": "Every collected non-live test instance passes; live integrations remain separately NOT_RUN"
+    }
+  ]
+}

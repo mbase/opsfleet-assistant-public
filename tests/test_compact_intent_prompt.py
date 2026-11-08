@@ -23,10 +23,10 @@ def test_compact_prompt_example_and_context_reach_gateway(monkeypatch,intent,mes
     context={'last_request':{'analysis':{'kind':'month','month':2,'year':{'kind':'absolute','value':2024}}},
         'released_evidence':[{'index':0,'as_of':'2026-11-05','rows':1}]}
     def generate(prompt,schema,max_tokens):
-        assert 'For new or modified analytical requests, return the full revised request, not a patch.' in prompt
+        assert 'New/modified analysis needs the full revised request.' in prompt
         assert 'For unchanged-snapshot intents explain, why, summary and save, return a compact intent only.' in prompt
         assert 'Do not reproduce the snapshot, evidence, report text or history.' in prompt
-        assert 'Explicit changes to dates, metrics, filters, statuses or report choices require the full revised analytical/report request' in prompt
+        assert 'Date/metric/filter/status/report changes need the full request' in prompt
         raw=json.JSONDecoder().raw_decode(prompt.split('Example unchanged save JSON: ',1)[1])[0]
         assert InterpretationProposal.model_validate(raw).model_dump()==contextual('save').model_dump()
         assert raw['request']['queries']==[] and raw['request']['report'] is None

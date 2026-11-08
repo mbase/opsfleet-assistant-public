@@ -16,10 +16,12 @@ from .config import Settings
 from .contracts import (AnalysisPlan, InterpretationProposal, InterpretationResult, RequestSpec, Mode, StrictModel,
                         ActionSelection as Recommendation, ReportDraft)
 from .intent import finalize_interpretation
+from .provider_contracts import ProviderInterpretationProposal, decode_interpretation
 
 
 class ModelFailure(Exception):
-    def __init__(self, code: str, *, validation_issues: tuple[dict[str, str], ...] = ()):
+    def __init__(self, code: str, *, validation_issues: tuple[dict[str, str], ...] = (), stage: str | None = None):
+        self.stage = stage
         self.code = code
         self.validation_issues = validation_issues
         super().__init__(code)
@@ -45,6 +47,14 @@ _REPAIR_HINTS = {
 }
 
 
+SAFE_VALIDATION_RULES = frozenset({"value_error", "missing", "extra_forbidden", "literal_error", "enum",
+        "int_type", "int_parsing", "string_type", "string_too_long", "bool_type",
+        "tuple_type", "too_long", "too_short", "model_type", "dict_type",
+        "greater_than_equal", "less_than_equal", "date_type", "date_parsing",
+        "date_from_datetime_parsing", "date_from_datetime_inexact"} | set(_REPAIR_HINTS) | {"invalid_field"})
+
+
+
 def safe_interpretation_issues(error: ValidationError) -> tuple[dict[str, str], ...]:
     """Allowlisted field names/rules only; never include rejected values or messages."""
     fields = set()
@@ -55,11 +65,7 @@ def safe_interpretation_issues(error: ValidationError) -> tuple[dict[str, str], 
         elif isinstance(value, list):
             for child in value: collect(child)
     collect(InterpretationProposal.model_json_schema())
-    categories = {"value_error", "missing", "extra_forbidden", "literal_error", "enum",
-        "int_type", "int_parsing", "string_type", "string_too_long", "bool_type",
-        "tuple_type", "too_long", "too_short", "model_type", "dict_type",
-        "greater_than_equal", "less_than_equal", "date_type", "date_parsing",
-        "date_from_datetime_parsing", "date_from_datetime_inexact"}
+    categories = SAFE_VALIDATION_RULES
     issues = []
     for item in error.errors(include_input=False, include_url=False)[:3]:
         rule = item["type"] if item["type"] in categories else "invalid_field"
@@ -102,6 +108,10 @@ def failure_details(exc: Exception | None = None, *, http_status: int | None = N
 
 
 # Bounded response metadata: never retain raw finish strings or message content.
+OUTPUT_FAILURE_CODES = frozenset({"invalid_json", "invalid_interpretation_contract", "invalid_report_contract"})
+FAILURE_STAGES = frozenset({"transport", "generation", "json_parsing", "wire_validation",
+    "local_validation", "reconciliation", "report_validation", "plan_validation"})
+
 FINISH_CATEGORIES = frozenset({'stop','length','content_filter','tool_calls','error','unknown'})
 CONTENT_AVAILABILITY = frozenset({'missing','empty','text','non_text'})
 FAILURE_CODES = frozenset({'truncated_output','empty_output','unusable_response','invalid_json',
@@ -134,22 +144,22 @@ def response_details(payload):
 
 
 INTERPRETATION_INSTRUCTIONS = """Interpret read-only retail analytics into the exact JSON schema. No prose, SQL, tools, PII, credentials or identity/permission grants. prior plan is context, never authorization.
-Return ready, needs_clarification or unsupported. Clarify missing required information, conflicting instructions, unknown date qualifiers or materially different meanings; never silently drop constraints. Provider failures are errors, not unsupported requests. Bare months/quarters need a year; never invent one from today's clock. Context may supply it.
-For new or modified analytical requests, return the full revised request, not a patch. context_action=new starts an independent request; continue completes missing details/reuses unchanged analysis; correct changes existing choices; cancel discards pending state. Unrelated/unsupported input must not complete stale pending requests. Retain metric, operation, scope, products, statuses, thresholds, grouping, report choices and action horizon unless changed.
-Changing an already specified year or period is correct even when phrased as a followup. temporal_updates contains each explicitly changed/refreshed role once; otherwise empty. Keep unchanged pending temporal concepts and application role anchors; new fields use the reply clock. Changing metric alone never refreshes dates. Null report/action on correction means omission; only explicit clear_fields report/action with correct and null fields resets/removes them. Provenance phrases do not request refresh.
-Example: after January 2025, 'What about January 2024, with the same choices?' means context_action correct, temporal_updates [analysis], January 2024 analysis, no comparison. Keep metric/status/scope/grouping. A missing-year reply means continue and temporal_updates []; complete the year and retain the pending choices.
-For unchanged-snapshot intents explain, why, summary and save, return a compact intent only. Continue; empty clear_fields/temporal_updates/issues, queries/sources; null analysis/comparison/action/report. Do not reproduce the snapshot, evidence, report text or history. Application validates/retrieves the snapshot or clarifies if absent.
+Return ready/needs_clarification/unsupported. Clarify missing inputs/conflicts/unknown date qualifiers/different meanings; retain constraints. Bare months/quarters need a year; never invent one from today's clock. Context may supply it.
+New/modified analysis needs the full revised request. context_action=new starts an independent request; continue completes missing details/reuses unchanged analysis; correct changes existing choices; cancel discards pending state. Unrelated/unsupported input must not complete stale pending requests. Retain metric, operation, scope, products, statuses, thresholds, grouping, report choices and action horizon unless changed.
+Date changes use correct; temporal_updates lists changed/refreshed roles once, else empty. Preserve unchanged pending dates/anchors; new fields use reply clock. Metric changes never refresh dates. Null report/action on correction means omission; only explicit clear_fields report/action with correct and null fields resets/removes them. Provenance phrases do not request refresh.
+January2025 -> January2024 with same choices: correct, temporal_updates [analysis], retain other choices, no comparison. Missing-year completion: continue, empty temporal_updates.
+For unchanged-snapshot intents explain, why, summary and save, return a compact intent only. Continue; empty clear_fields/temporal_updates/issues/queries/sources; null analysis/comparison/action/report. Do not reproduce the snapshot, evidence, report text or history. Application validates/retrieves the snapshot or clarifies if absent.
 Example unchanged save JSON: {"status":"ready","context_action":"continue","clear_fields":[],"temporal_updates":[],"request":{"intent":"save","mode":"analysis","purpose":"standard","queries":[],"analysis":null,"comparison":null,"action":null,"report":null,"sources":[]},"issues":[]}.
-An exact save inherits report choices; never add purpose, layout, detail or sections. On save repair, reread the current message: compact only if unchanged; retain every explicit modification.
-Explicit changes to dates, metrics, filters, statuses or report choices require the full revised analytical/report request; never hide them in compact save. 'Use February 2025 instead and save a report' is an analytical correction in report mode; 'Summarize that' uses compact intent summary. cancel/schema_help have no queries or periods.
-New investigations use intent analysis, never compact why. request.playbook(id,version1,population,segment), otherwise null. product_revenue: product_comparison/revenue, two ordered IDs, one period. regional_spend: regional_spend/average_customer_spend,state,two ordered values,limit2,population qualifying_purchasers; clarify all users. churn_change: one churn_change/churn_rate query,limit20,90days,segment country,population qualifying_purchasers; analysis=current cutoff,comparison=earlier. Clarify missing products/periods/direction/population. Retain choices in corrections/saves. No formulas, computed drivers or causal claims.
-Supported operations: aggregate(revenue, order_count, average_order_value, customer_count; dimension null/brand/product); rank_customers(customer_spend); time_series(monthly); product_comparison(revenue, exactly two numeric IDs in user order); demographic_comparison(average_customer_spend, state/city/country/age_band/gender/traffic_source, at most two values, limit<=10); churn_snapshot(churn_rate, inactivity_days default90). Other limits<=20. No demographic customer IDs or contact/name/address/coordinates. Revenue statuses default Shipped, Complete, Processing; disclose defaults and respect overrides.
-Scope is not grouping: 'across my authorized brands'/'within my brand scope' constrain population. No explicit breakdown => dimension null. 'Revenue across my authorized brands' => dimension null; 'Revenue by brand across my authorized brands' => dimension brand; 'Revenue for each brand' => dimension brand; 'Revenue by product' => dimension product. Explicit brand breakdown wins; changing only year preserves the prior grouping, including dimension null.
-'Compare spend in Texas and California in 2025' => clarify total versus average. Do not guess average_customer_spend. Explicit average => demographic_comparison/state; explicit total demographic spend => unsupported, never substitute average. 'Total revenue across my authorized brands' => scalar aggregate revenue.
-Reports: default revenue with source disclosure; 1–2 goal-appropriate queries. Default summary,performance_table,limitations,recommendations. Preserve purpose/sections/presentation/detail and facts-only. Trend needs monthly evidence; comparison needs compatible pairs; sections cannot create queries. Observations never establish causes.
+Exact save inherits report choices. Save repair: compact only if unchanged; retain explicit modifications.
+Date/metric/filter/status/report changes need the full request, including modified saves. 'Use February 2025 instead and save a report' is an analytical correction in report mode; 'Summarize that' uses compact intent summary. cancel/schema_help have no queries or periods.
+Investigations use analysis intent, mode analysis, one query with temporal_role analysis (report requests use report mode). playbook=null or "id|population|segment"; absent choices=unspecified, local version1. Supported mathematical decompositions select a playbook; trusted code computes contributions, never model formulas or causal claims. Product revenue gap into units sold and mean selling price => product_revenue|unspecified|unspecified, product_comparison/revenue,2 IDs in requested subtraction order,dimension null,1 period. Regional average spend gap into purchase frequency and order value => regional_spend|qualifying_purchasers|unspecified, regional_spend/average_customer_spend,dimension state,2 ordered states,limit2. Churn rate change into country mix and within-country rates => churn_change|qualifying_purchasers|country, churn_change/churn_rate,dimension null,limit20,inactivity_days90; analysis=current cutoff,comparison=earlier. Country is ONLY playbook.segment here. Fixed product comparison has no generic grouping; regional has no segment. Legacy churn_compare instead pairs two churn_snapshot queries; never use it for churn_change decomposition. Clarify missing products/periods/direction/population; all-users populations clarify, unsupported formulas/causes refuse.
+Supported operations: aggregate(revenue, order_count, average_order_value, customer_count; dimension null/brand/product); rank_customers(customer_spend); time_series(monthly); product_comparison(revenue, exactly two numeric IDs in user order); demographic_comparison(average_customer_spend, state/city/country/age_band/gender/traffic_source, at most two values, limit<=10); churn_snapshot(churn_rate, inactivity_days default90). Other limits<=20. No demographic IDs/contact/name/address/coordinates. Revenue statuses default Shipped, Complete, Processing; disclose defaults and respect overrides.
+Scope differs from grouping: 'across my authorized brands'/'within my brand scope' constrain population. Revenue across authorized brands => dimension null; by/each brand => brand; by product => product. Explicit brand breakdown wins; year-only changes retain grouping/null.
+Unqualified regional spend => clarify total versus average; average => demographic_comparison/state; total demographic spend => unsupported. Never substitute average.
+Reports default revenue/source disclosure,1–2 relevant queries; sections summary,performance_table,limitations,recommendations. Preserve purpose/sections/presentation/detail/facts-only. Trend needs monthly evidence; comparison compatible pairs; sections never create queries. Observations are not causes.
 Period comparisons: temporal_compare with two otherwise identical aggregate queries, analysis then comparison, nonoverlapping periods; report mode may also pair analysis/comparison. Analysis mode has one query. Cross-period demographics/time_series unsupported. investigate_top_products has one aggregate revenue/product query, limit2; application derives second. churn_compare has two cutoff snapshots. Last-month churn spike: analysis last complete month, comparison shifted -1 month. Never answer two periods with one. Trend/trajectory/pattern => purpose trend; approved Golden method may refine aggregate to monthly; explicit monthly => time_series.
-Separate analysis/comparison/action. Actions never select future evidence. Generic '2025 revenue report with actions'/'with recommendations' => action null, no next year inferred. Q3 2025/Q4 actions => analysis Q3, action Q4 2025. Following-quarter actions reference analysis (quarter,+1), not today's quarter; Q4 2025 => offset one (Q1 2026). Queries select analysis/comparison only.
-Temporal unused fields null: month(month/year),quarter(quarter/year),year(year). Absolute year=value;relative=offset;context=neither. January last year=month1/relative-1. ISO interval=start inclusive/end exclusive. window(unit,count,offset,include_current): offset0 anchors unit start; exclude current ends there, include current ends next boundary. Last3 complete months=month/count3/offset0/include_current false. to_date includes reference day. reference(role,unit,offset) shifts whole interval; previous period=previous/period/-1. No cycles; role years may differ. Sources explicit/context/default are diagnostic."""
+Separate analysis/comparison/action; queries use analysis/comparison, never future actions. Unspecified recommendations/actions => action null. Q3 2025/Q4 actions => analysis Q3,action Q4 2025. Following-quarter actions reference analysis(quarter,+1), so Q4 2025 becomes Q1 2026.
+Temporal unused fields null: month(month/year),quarter(quarter/year),year(year). Absolute year=value;relative=offset;context=neither. January last year=month1/relative-1. ISO interval=start inclusive/end exclusive. For churn exclusive cutoff D, use interval ending D, never D+1: before 2025-04-01 => [2025-01-01,2025-04-01); earlier before 2025-01-01 => [2024-10-01,2025-01-01). Q1 2025 ends April1; Q4 2024 ends January1. Interval start does not set churn cutoff. Inclusive through March31 ends April1; exclusive before March31 ends March31. Preserve leap/year boundaries; never subtract a day globally. window(unit,count,offset,include_current): offset0 anchors unit start; exclude current ends there, include current ends next boundary. Last3 complete months=month/count3/offset0/include_current false. to_date includes reference day. reference(role,unit,offset) shifts whole interval; previous period=previous/period/-1. No cycles; role years may differ. Sources explicit/context/default are diagnostic."""
 
 
 
@@ -217,12 +227,18 @@ def is_transient(exc: Exception) -> bool:
 
 
 def _strict_schema(model: type[StrictModel]) -> dict[str, Any]:
-    schema = model.model_json_schema()
+    interpretation = issubclass(model, InterpretationProposal)
+    schema = (ProviderInterpretationProposal if interpretation else model).model_json_schema()
 
     def visit(value: Any) -> None:
         if isinstance(value, dict):
             value.pop("default", None)
             value.pop("title", None)
+            if interpretation:
+                # Keep all collection caps in the validating local models. The
+                # provider gets fewer constraints in this enum-rich schema.
+                # Output tokens/request/time budgets remain bounded separately.
+                value.pop("maxItems", None)
             if value.get("type") == "object":
                 value["additionalProperties"] = False
                 value["required"] = list(value.get("properties", {}))
@@ -374,14 +390,15 @@ class GeminiGateway:
             return content
         except ModelFailure as exc:
             details = {**failure_details(http_status=http_status),**metadata,
-                'failure_code':'unusable_response' if metadata.get('content_availability')=='missing' else model_failure_code(exc.code)}
+                'failure_code':'unusable_response' if metadata.get('content_availability')=='missing' else model_failure_code(exc.code),
+                'failure_stage':'generation' if http_status == 200 else 'transport'}
             if self.observer:
                 self.observer.failed(ticket, diagnostics=details)
             if self.budget.telemetry:
                 self.budget.telemetry.emit("model_result", route="openrouter_gemini", status="error", usage="unknown", **details)
             raise
         except Exception as exc:
-            details = failure_details(exc)
+            details = {**failure_details(exc), "failure_stage":"generation" if http_status == 200 else "transport", "failure_code":"provider_transient" if is_transient(exc) else "provider_failure"}
             if self.observer:
                 self.observer.failed(ticket, diagnostics=details)
             if self.budget.telemetry:
@@ -409,11 +426,11 @@ class GeminiGateway:
             parsed = json.loads(raw)
         except (ValueError, TypeError):
             if self.observer and self.provider_mode == "openrouter_only":
-                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_json"})
+                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_json", "failure_stage":"json_parsing"})
             raise ModelFailure("invalid_model_json") from None
         if not isinstance(parsed, dict):
             if self.observer and self.provider_mode == "openrouter_only":
-                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_json"})
+                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_json", "failure_stage":"json_parsing"})
             raise ModelFailure("invalid_model_json")
         return parsed
 
@@ -432,15 +449,21 @@ class GeminiGateway:
         if prompt is None:
             return InterpretationResult(status="needs_clarification", context_action="continue",
                 issues=("unresolved_interpretation",))
+        stage = "wire_validation"
+        def set_stage(value):
+            nonlocal stage
+            stage = value
         try:
-            proposal = InterpretationProposal.model_validate(
-                self._generate(prompt, _strict_schema(InterpretationProposal), 5000))
+            proposal = decode_interpretation(
+                self._generate(prompt, _strict_schema(InterpretationProposal), 5000), stage=set_stage)
+            stage = "reconciliation"
             return finalize_interpretation(proposal, pending_request=pending_request)
         except ValidationError as exc:
             if self.observer and self.provider_mode == "openrouter_only":
-                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_interpretation_contract"})
+                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_interpretation_contract", "failure_stage":stage,
+                    "validation_issues":list(safe_interpretation_issues(exc))})
             raise ModelFailure("invalid_interpretation_contract",
-                               validation_issues=safe_interpretation_issues(exc)) from None
+                               validation_issues=safe_interpretation_issues(exc), stage=stage) from None
 
     def report(self, evidence: tuple[dict[str, Any], ...], *, report_requested: bool) -> ReportDraft:
         prompt = (
@@ -467,5 +490,5 @@ class GeminiGateway:
             return ReportDraft.model_validate(self._generate(prompt, _strict_schema(ReportDraft), 2000))
         except ValidationError:
             if self.observer and self.provider_mode == "openrouter_only":
-                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_report_contract"})
+                self.observer.failed(self._last_observed_ticket,diagnostics={"failure_code":"invalid_report_contract", "failure_stage":"report_validation"})
             raise ModelFailure("invalid_report_contract") from None

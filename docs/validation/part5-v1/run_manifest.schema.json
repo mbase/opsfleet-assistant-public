@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Part 5 candidate run manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version",
+    "source",
+    "scenario_file",
+    "fixture_snapshot_sha256",
+    "driver_sha256",
+    "dependency_lock_sha256",
+    "unadopted_uv_sha256",
+    "metadata_sha256",
+    "versions",
+    "prepared_interpreter",
+    "command",
+    "caps",
+    "provider",
+    "warehouse",
+    "review",
+    "status",
+    "acceptance_complete"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "version": {
+      "const": "part5-v1"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "files",
+        "revision",
+        "application_head",
+        "application_tree",
+        "uncommitted",
+        "inventory_policy"
+      ],
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "application_head": {
+          "type": "string"
+        },
+        "application_tree": {
+          "type": "string"
+        },
+        "uncommitted": {
+          "type": "boolean"
+        },
+        "inventory_policy": {
+          "const": "part5-inputs-v2"
+        }
+      }
+    },
+    "scenario_file": {
+      "type": "string"
+    },
+    "fixture_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "driver_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "dependency_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "unadopted_uv_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "metadata_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "versions": {
+      "type": "object"
+    },
+    "prepared_interpreter": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turns",
+        "provider_attempts",
+        "warehouse_executions",
+        "billed_bytes",
+        "active_seconds"
+      ],
+      "properties": {
+        "turns": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        },
+        "provider_attempts": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 240
+        },
+        "warehouse_executions": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 40
+        },
+        "billed_bytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 5368709120
+        },
+        "active_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 2700
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route",
+        "model",
+        "estimated_cost_usd",
+        "cost_limit_usd",
+        "maximum_cost_per_call_usd"
+      ],
+      "properties": {
+        "route": {
+          "const": "openrouter_only"
+        },
+        "model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./:@+-]{1,160}$"
+        },
+        "estimated_cost_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "cost_limit_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "maximum_cost_per_call_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "warehouse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "dataset",
+        "snapshot_timestamp",
+        "same_snapshot_authorized"
+      ],
+      "properties": {
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dataset": {
+          "const": "bigquery-public-data.thelook_ecommerce"
+        },
+        "snapshot_timestamp": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "same_snapshot_authorized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owner_approved",
+        "paraphrases_independently_reviewed"
+      ],
+      "properties": {
+        "owner_approved": {
+          "type": "boolean"
+        },
+        "paraphrases_independently_reviewed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_ENVIRONMENT",
+        "NOT_RUN"
+      ]
+    },
+    "acceptance_complete": {
+      "const": false
+    }
+  }
+}

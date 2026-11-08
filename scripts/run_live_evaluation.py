@@ -10,6 +10,14 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+# Verify on script startup before importing config, workflow or calculation code.
+# Historical imports remain available for the original driver's tests/callers.
+if __name__ == '__main__' and any(a == '--manifest' or a.startswith('--manifest=') for a in sys.argv[1:]):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('part5_inventory_bootstrap', ROOT / 'src/opsfleet_assistant/evaluation_inventory.py')
+    inventory_bootstrap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(inventory_bootstrap)
+    inventory_bootstrap.bootstrap(ROOT, sys.argv[1:])
 sys.path.insert(0, str(ROOT/'src'))
 from opsfleet_assistant.config import Settings
 from opsfleet_assistant.evaluation_contracts import Accounting, MAX_CAPS, Redactor, atomic_json, digest, totals, verify_source
@@ -34,6 +42,9 @@ def fingerprints():
 
 
 def main():
+    if any(a == '--manifest' or a.startswith('--manifest=') for a in sys.argv[1:]):
+        from opsfleet_assistant.evaluation_part5 import main as part5_main
+        return part5_main(sys.argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-id',required=True)
     parser.add_argument('--live',action='store_true')

@@ -49,7 +49,7 @@ class FixtureClient:
     checked with explicit tolerance. Exact Decimal division/points have separate
     controlled regression cases. Fixture totals are independent authored operands.
     """
-    def __init__(self, profile='standard'):
+    def __init__(self, profile='standard', *, snapshot=None):
         self.db = sqlite3.connect(':memory:')
         self.db.create_aggregate('SUM', 1, DecimalSum)
         self.db.create_function('DATE_TRUNC', 2, lambda unit, value: str(value)[:7]+'-01')
@@ -83,6 +83,21 @@ class FixtureClient:
                     self.add(i*10+2, 41001, 'Cancelled', '7', day)
                     self.add(i*10+3, 41001, 'Complete', None, day)
         self.calls = []
+        if snapshot is not None:
+            # Versioned public synthetic rows, supplied only by the evaluation driver.
+            import json
+            source = json.loads(Path(snapshot).read_text())
+            if source['version'] != 'part5-source-v1':
+                raise ValueError('fixture_snapshot_version')
+            for table in ('order_items', 'orders', 'users', 'products'):
+                self.db.execute('DELETE FROM ' + table)
+            for table in ('products', 'orders', 'users', 'order_items'):
+                for row in source['profiles'][profile][table]:
+                    columns = tuple(row)
+                    if not set(columns).issubset({r[1] for r in self.db.execute('PRAGMA table_info('+table+')')}):
+                        raise ValueError('fixture_column')
+                    self.db.execute('INSERT INTO '+table+' ('+','.join(columns)+') VALUES ('+
+                                    ','.join('?' for _ in columns)+')', tuple(row.values()))
 
     def add(self, order, product, status, value, day):
         if not self.db.execute('SELECT 1 FROM orders WHERE order_id=?', (order,)).fetchone():
@@ -118,7 +133,7 @@ class FixtureClient:
         names = tuple(x[0] for x in cursor.description)
         integers = {'id','product_id','order_id','user_id','customers','order_count','customer_count',
                     'item_count','eligible_customers','inactive_customers','source_rows','period_rows','matched_customers'}
-        strings = {'brand','demographic_value'}
+        strings = {'brand','demographic_value','cutoff_role','segment_key','key','country'}
         schema = [bigquery.SchemaField(n, 'INT64' if n in integers else 'STRING' if n in strings else
                     'DATE' if n == 'month' else 'TIMESTAMP' if n == 'latest_item_at' else 'NUMERIC') for n in names]
         rows = []

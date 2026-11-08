@@ -17,3 +17,16 @@ runtime/
 
 # Generated evaluation output; scenario/source contracts remain tracked.
 docs/remediation/runs/
+docs/validation/*/runs/
+docs/validation/*/private/
+docs/validation/*/results/
+docs/validation/*/history/
+
+# Local implementation-session reports and live-run handoffs.
+docs/PART_5_BIGQUERY_SMOKE_RESULTS.md
+docs/PART_5_LEGACY_SMOKE_RESULTS.md
+docs/PART_5_IMPLEMENTATION_REPORT.md
+docs/PART_5_REMEDIATION_REPORT.md
+docs/PART_5_LIVE_BASELINE_HANDOFF.md
+docs/PART_5_REMEDIATION_LIVE_PLAN.md
+docs/PART_5_LEGACY_SMOKE_PLAN.md

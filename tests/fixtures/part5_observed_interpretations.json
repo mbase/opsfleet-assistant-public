@@ -1,0 +1,2784 @@
+{
+  "source_artifact": "docs/validation/part5-v1/results/schema-regression/observed-interpretation-cases.json",
+  "source_sha256": "b389b121cfb0be16faad9c147d0e4accdd36cbbb70de213aaaade113ab2c0f20",
+  "scope": "Frozen first parsed proposals derived from preserved baseline. Offline replay only.",
+  "cases": [
+    {
+      "scenario": "product-p1-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p1-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p1-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p2-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p2-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p2-r3",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "product",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Shipped",
+                  "Complete",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p3-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p3-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p3-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p4-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p4-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p4-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "product_revenue",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "revenue",
+                "operation": "product_comparison",
+                "product_ids": [
+                  1,
+                  2
+                ],
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p5-r1",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p5-r2",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "product-p5-r3",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p1-r1",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p1-r2",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p1-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p2-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p2-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Shipped",
+                  "Complete",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p2-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": [
+            "analysis"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p3-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p3-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p3-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p4-r1",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p4-r2",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unresolved_interpretation"
+          ],
+          "status": "needs_clarification",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p4-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p5-r1",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [
+            "unsupported_capability"
+          ],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "unsupported",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p5-r2",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "regional-p5-r3",
+      "observed_status": "PASS",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "regional_spend",
+              "population": "qualifying_purchasers",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "demographic_values": [
+                  "Texas",
+                  "California"
+                ],
+                "dimension": "state",
+                "inactivity_days": 90,
+                "limit": 2,
+                "metric": "average_customer_spend",
+                "operation": "regional_spend",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p1-r1",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "comparison": {
+              "end": "2025-01-01",
+              "kind": "interval",
+              "start": "2024-10-03"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p1-r2",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p1-r3",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p2-r1",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "comparison": {
+              "end": "2025-01-01",
+              "kind": "interval",
+              "start": "2024-10-03"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p2-r2",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p2-r3",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p3-r1",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p3-r2",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p3-r3",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "kind": "quarter",
+              "quarter": 1,
+              "year": {
+                "kind": "absolute",
+                "value": 2025
+              }
+            },
+            "comparison": {
+              "kind": "quarter",
+              "quarter": 4,
+              "year": {
+                "kind": "absolute",
+                "value": 2024
+              }
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p4-r1",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p4-r2",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p4-r3",
+      "observed_status": "FAIL",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        },
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-02",
+              "kind": "interval",
+              "start": "2025-04-01"
+            },
+            "comparison": {
+              "end": "2025-01-02",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p5-r1",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "comparison": {
+              "end": "2025-01-01",
+              "kind": "interval",
+              "start": "2024-10-03"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p5-r2",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "comparison": {
+              "end": "2025-01-01",
+              "kind": "interval",
+              "start": "2024-10-03"
+            },
+            "intent": "analysis",
+            "mode": "churn_compare",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    },
+    {
+      "scenario": "churn-p5-r3",
+      "observed_status": "PROVIDER_FAILURE",
+      "parsed_local_proposals_without_sources": [
+        {
+          "clear_fields": [],
+          "context_action": "new",
+          "issues": [],
+          "request": {
+            "analysis": {
+              "end": "2025-04-01",
+              "kind": "interval",
+              "start": "2025-01-01"
+            },
+            "comparison": {
+              "end": "2025-01-01",
+              "kind": "interval",
+              "start": "2024-10-01"
+            },
+            "intent": "analysis",
+            "mode": "analysis",
+            "playbook": {
+              "id": "churn_change",
+              "population": "qualifying_purchasers",
+              "segment": "country",
+              "version": 1
+            },
+            "purpose": "standard",
+            "queries": [
+              {
+                "dimension": "country",
+                "inactivity_days": 90,
+                "limit": 20,
+                "metric": "churn_rate",
+                "operation": "churn_change",
+                "revenue_statuses": [
+                  "Complete",
+                  "Shipped",
+                  "Processing"
+                ],
+                "temporal_role": "analysis"
+              }
+            ]
+          },
+          "status": "ready",
+          "temporal_updates": []
+        }
+      ]
+    }
+  ]
+}

@@ -17,13 +17,13 @@ import time
 from unittest.mock import patch
 from uuid import NAMESPACE_URL, uuid5
 
-from . import bigquery_adapter, identity, workflow
+from . import bigquery_adapter, identity, workflow, request_resolver, analysis_executor
 from .bigquery_adapter import BigQueryTurn, ExecutionError, _client_from_adc, _classify
 from .config import ROOT, Settings
 from .evaluation_contracts import (Accounting, MAX_CAPS, Redactor, StopScheduling,
     assertions, atomic_json, digest, totals, verify_source)
 from .evaluation_fixtures import FixtureClient
-from .model_gateway import GeminiGateway, ModelFailure, response_details
+from .model_gateway import GeminiGateway, ModelFailure, response_details, OUTPUT_FAILURE_CODES
 from .store import SQLiteStore
 from .telemetry import TurnTrace
 
@@ -37,6 +37,8 @@ WAREHOUSE_ENVIRONMENT_REASONS = frozenset({
 })
 
 
+PLAN_FAILURE_CODES = frozenset({'invalid_plan_contract', 'plan_intent_mismatch', 'plan_period_mismatch', 'plan_limit_mismatch', 'plan_investigation_mismatch'})
+
 def safe_failure(boundary, stage, reason):
     allowed = workflow.SAFE_ERROR_CODES | {'credentials_unavailable'}
     return {'boundary':boundary,'stage':stage,
@@ -48,7 +50,8 @@ def outcome_status(checks, observed, events, stop):
         return 'BLOCKED_ENVIRONMENT'
     # Failed model dispatches retain their provenance even when another stage
     # also fails or deterministic checked evidence is useful.
-    if any(e['kind']=='provider' and e['outcome']=='failed' for e in events):
+    if any(e['kind']=='provider' and e['outcome']=='failed' and
+           e.get('diagnostics', {}).get('failure_code') not in OUTPUT_FAILURE_CODES for e in events):
         return 'PROVIDER_FAILURE'
     failure = observed.get('terminal_error') or {}
     if observed.get('error_category') in {'internal','syntax','schema'}:
@@ -58,6 +61,8 @@ def outcome_status(checks, observed, events, stop):
     if (failure.get('boundary')=='warehouse' and failure.get('reason') in WAREHOUSE_ENVIRONMENT_REASONS
             or failure.get('boundary')=='model' and failure.get('reason')=='backup_unconfigured'):
         return 'BLOCKED_ENVIRONMENT'
+    if any(e['kind']=='provider' and e['outcome']=='failed' for e in events):
+        return 'FAIL'
     if stop or failure:
         return 'FAIL'
     return 'PASS' if all(c['passed'] for c in checks) else 'FAIL'
@@ -107,8 +112,13 @@ class GuardedJob:
 
 class GuardedClient:
     """Intercept every actual BigQuery dispatch, including catalog and coverage."""
-    def __init__(self, client, accounting): self.client,self.a=client,accounting
+    def __init__(self, client, accounting, *, snapshot_timestamp=None):
+        self.client,self.a=client,accounting
+        self.snapshot_timestamp = snapshot_timestamp
     def query(self,sql,*,job_config,**kwargs):
+        if self.snapshot_timestamp is not None:
+            from .evaluation_part5 import snapshot_sql
+            sql = snapshot_sql(sql, self.snapshot_timestamp)
         self.a.check()
         left=self.a.state['caps']['active_seconds']-self.a.state['used']['active_seconds']
         kwargs['timeout']=min(kwargs.get('timeout',30),left)
@@ -184,6 +194,9 @@ def observe_result(result, captured, proposals):
     value['safe_error_code']=match.group(1) if match and match.group(1) in workflow.SAFE_ERROR_CODES else None
     value['compiled_queries']=captured
     value['interpretations']=proposals
+    first = proposals[0].get('request') or {} if proposals else {}
+    playbook = first.get('playbook') or {}
+    value['interpretation_contract'] = {k: playbook.get(k) for k in ('id', 'population', 'segment')}
     value['analysis_queries']=len(captured)
     value['saved']=result.report_id is not None
     composition=result.report_composition or {}
@@ -282,7 +295,7 @@ def run_workflow(case,turn,private,account,settings,records):
     # Copy only nonsecret identity configuration. This is a disposable synthetic
     # identity file; its trusted resolver and fingerprint checks remain active.
     if not (synthetic/'demo_users.json').exists(): (synthetic/'demo_users.json').write_bytes(users.read_bytes())
-    captured=[]; proposals=[]; failures=[]
+    captured=[]; proposals=[]; failures=[]; interpretation_attempts=[]; plan_failures=[]
     bindings_path=directory/'catalog-bindings.json'
     catalog_bindings=json.loads(bindings_path.read_text()) if bindings_path.exists() else {}
     precondition_path=directory/'data-precondition.json'
@@ -297,10 +310,12 @@ def run_workflow(case,turn,private,account,settings,records):
             events=[e for e in account.state['events'] if e['turn']==account.state['active_turn'] and e['kind']=='provider']
             if events: observer.failed(events[-1])
         def interpret(self,*args,**kwargs):
+            interpretation_attempts.append("failed")
             try: value=super().interpret(*args,**kwargs)
             except ModelFailure as exc:
                 failures.append(safe_failure('model','interpretation',exc.code))
                 self._failed_contract(); raise
+            interpretation_attempts[-1] = value.status
             proposals.append(value.model_dump(mode='json',exclude_none=True))
             return value
         def report(self,*args,**kwargs):
@@ -316,13 +331,14 @@ def run_workflow(case,turn,private,account,settings,records):
             limits=replace(limits,turn_seconds=min(limits.turn_seconds,left))
             if case['mode']=='live_fixture':
                 s=replace(s,project=s.project or 'evaluation-fixture-only')
-                client=FixtureClient(case.get('fixture','standard'))
+                client=FixtureClient(case.get('fixture','standard'), snapshot=case.get('fixture_snapshot'))
             else:
                 if not s.project:
                     failures.append(safe_failure('warehouse','configuration','missing_project'))
                     raise ExecutionError('missing_project')
                 try:
-                    client=GuardedClient(_client_from_adc(s),account)
+                    client=GuardedClient(_client_from_adc(s),account,
+                                         snapshot_timestamp=case.get('snapshot_timestamp'))
                 except Exception as exc:
                     from google.auth.exceptions import DefaultCredentialsError
                     reason='credentials_unavailable' if isinstance(exc,DefaultCredentialsError) else _classify(exc).category
@@ -353,6 +369,9 @@ def run_workflow(case,turn,private,account,settings,records):
     cid=str(uuid5(NAMESPACE_URL,account.state['identity']['run_id']+'/'+case['id']))
     tid=str(uuid5(NAMESPACE_URL,cid+'/'+turn.get('replay_of',turn['id'])))
     message=turn['message']
+    if turn.get('confirm_proposal_from'):
+        prior = records[turn['confirm_proposal_from']]['attempts'][0]['observed']
+        message = 'confirm ' + prior['confirmation']['token']
     if turn.get('replay_of'):
         message=next(t['message'] for t in case['turns'] if t['id']==turn['replay_of'])
     # Scoped catalog discovery is through this same guarded adapter and included
@@ -379,7 +398,18 @@ def run_workflow(case,turn,private,account,settings,records):
             atomic_json(bindings_path,catalog_bindings)
             atomic_json(precondition_path,data_precondition)
             message=message.replace('{product_1}',str(bindings['product_1'])).replace('{product_2}',str(bindings['product_2']))
+        original_plans = request_resolver.analytical_plans
+        def checked_plans(*args, **kwargs):
+            try:
+                return original_plans(*args, **kwargs)
+            except identity.PolicyError as exc:
+                code = str(exc)
+                if code in PLAN_FAILURE_CODES:
+                    plan_failures.append({'stage':'plan_validation', 'code':code, 'issues':[]})
+                raise
         with ExitStack() as stack:
+            stack.enter_context(patch.object(request_resolver, 'analytical_plans', checked_plans))
+            stack.enter_context(patch.object(analysis_executor, 'analytical_plans', checked_plans))
             stack.enter_context(patch.object(workflow,'ROOT',directory))
             stack.enter_context(patch.object(workflow,'TurnTrace',IsolatedTrace))
             stack.enter_context(patch.object(workflow,'resolve_demo_scope',resolver))
@@ -388,8 +418,68 @@ def run_workflow(case,turn,private,account,settings,records):
             try:
                 flow=workflow.AssistantWorkflow(settings,store,gateway_factory=EvaluationGateway,
                     turn_factory=turn_factory,today=date.fromisoformat(turn['analytical_date']))
+                if turn.get('navigation'):
+                    from .report_service import ReportService
+                    service = ReportService.from_workflow(flow)
+                    prior = records[turn['report_from']]['attempts'][0]['observed']
+                    nav = (service.read(case['owner'], prior['report_id']) if turn['navigation'] == 'read'
+                           else service.list(case['owner'], limit=1))
+                    value = asdict(nav)
+                    value['same_saved_text'] = (nav.content is not None and nav.content['text'] == prior['text'])
+                    value['model_requests'] = 0
+                    return value
                 result=flow.run(case['owner'],message,conversation_id=cid,turn_id=tid)
                 observed=observe_result(result,captured,proposals)
+                observed["interpretation_attempts"] = len(interpretation_attempts)
+                observed["first_model_status"] = interpretation_attempts[0] if interpretation_attempts else None
+                observed["plan_failures"] = plan_failures
+                if case.get('layer') == 'interpretation' and proposals:
+                    # A valid clarification/unsupported reply may have no
+                    # request. Preserve that semantic failure for the rubric
+                    # rather than raising while inspecting absent query slots.
+                    observed.update(first_request=None, first_query_count=0,
+                                    first_operations=[], first_query=None, first_periods=None)
+                if case.get('layer') == 'interpretation' and proposals and proposals[0].get('request') is not None:
+                    # Judge the first parsed interpretation as well as the final
+                    # executed request; a later repair cannot hide substitution.
+                    from .contracts import RequestSpec
+                    from .periods import resolve_request, ResolutionFailure
+                    initial = RequestSpec.model_validate(proposals[0].get('request'))
+                    first_request = initial.model_dump(mode='json')
+                    # Compare the complete operation/effect set, not query zero.
+                    # Period syntax is judged by resolved roles below; sources
+                    # are diagnostic provenance rather than execution choices.
+                    for field in ('analysis', 'comparison', 'sources'):
+                        first_request.pop(field)
+                    first_request['comparison_present'] = initial.comparison is not None
+                    for query in first_request['queries']:
+                        query['revenue_statuses'] = sorted(query['revenue_statuses'])
+                        brands = query['requested_brands']
+                        query['requested_brands'] = sorted(brands) if brands is not None else case['semantic_scope_brands']
+                        # These fixed-shape playbooks do not compile a LIMIT;
+                        # non-churn operations do not use an inactivity window.
+                        # Ignore only those inert defaults, never query/effect
+                        # count, actual filters, or a churn inactivity choice.
+                        if query['operation'] in {'product_comparison', 'regional_spend', 'churn_change'}:
+                            query.pop('limit')
+                        if query['operation'] in {'product_comparison', 'regional_spend'}:
+                            query.pop('inactivity_days')
+                    observed['first_request'] = first_request
+                    observed['first_query_count'] = len(initial.queries)
+                    observed['first_operations'] = [q.operation.value for q in initial.queries]
+                    if initial.queries:
+                        query = initial.queries[0].model_dump(mode='json')
+                        query['revenue_statuses'] = sorted(query['revenue_statuses'])
+                        if query.get('requested_brands'):
+                            query['requested_brands'] = sorted(query['requested_brands'])
+                        observed['first_query'] = query
+                    try:
+                        resolved = resolve_request(initial, reference_date=date.fromisoformat(turn['analytical_date']),
+                                                   analytical_timezone='UTC')
+                        observed['first_periods'] = {role: getattr(resolved, role).model_dump(mode='json')
+                            if getattr(resolved, role) else None for role in ('analysis', 'comparison', 'action')}
+                    except ResolutionFailure:
+                        observed['first_periods'] = None
                 observed['input']=message
                 observed['saved_report_integrity']=saved_report_integrity(result,store,case['owner'])
                 observed['catalog_bindings']=catalog_bindings
@@ -415,7 +505,14 @@ def run_workflow(case,turn,private,account,settings,records):
                         # Preserve the already observed workflow and counters;
                         # the independently accounted reference remains blocked.
                         pass
-                if failures and (result.status=='error' or turn.get('reference_scalar') and
+                if turn.get('reference_playbook') and result.driver_finding:
+                    try:
+                        from .evaluation_part5 import playbook_reference
+                        observed['independent_reference'] = playbook_reference(
+                            adapters[-1], turn['reference_playbook'], result.driver_finding, catalog_bindings)
+                    except ExecutionError:
+                        pass
+                if failures and (result.status=='error' or (turn.get('reference_scalar') or turn.get('reference_playbook')) and
                                  'independent_reference' not in observed):
                     observed['terminal_error']=failures[-1]
                 observed['total_query_executions_including_reference']=sum(x.executions for x in adapters)
@@ -459,7 +556,9 @@ def live_reference(settings,result,adapters,account,expected):
     return {'value':str(value) if value is not None else None,'matches':value is not None and source is not None and
             abs(Decimal(str(value))-Decimal(str(source)))<=Decimal('0.000001'),
             'job_id':completed.job_id,'as_of':completed.as_of.isoformat(),'expected_inputs':expected,
-            'limitation':'mutable public source; separate jobs are not an atomic snapshot'}
+            'limitation':('fixed-time source reads; availability/retention must be verified by the owner'
+                          if getattr(adapters[-1].client, 'snapshot_timestamp', None) else
+                          'mutable public source; separate jobs are not an atomic snapshot')}
 
 
 def run_probe(case,turn,private,account):
@@ -513,6 +612,11 @@ def execute(account,manifest,private,*,live=False,settings=None,selection=None):
                 observed=run_probe(case,turn,private,account) if case['mode']=='controlled_regression' else run_workflow(case,turn,private,account,settings,records)
                 previous=records[turn['compare_to']]['attempts'][-1]['observed'] if turn.get('compare_to') else None
                 checks=assertions(turn['assertions'],observed,previous)
+                first_checks = [c for c in checks if c['rule']['path'].startswith(('first_', 'interpretation_contract.'))]
+                if case.get('layer') == 'interpretation':
+                    attempt['first_semantic_status'] = ('NOT_RUN' if not observed.get('interpretation_attempts') else
+                        'PASS' if observed.get('first_model_status') == 'ready' and first_checks and all(c['passed'] for c in first_checks) else 'FAIL')
+                    attempt['workflow_status'] = observed.get('status')
                 events=[e for e in account.state['events'] if e['turn']==key]
                 row.update(status=outcome_status(checks,observed,events,account.state['stop']),reason=account.state['stop'])
                 attempt.update(outcome='COMPLETED',observed=observed,assertions=checks)

@@ -166,7 +166,7 @@ def test_safe_unusable_provider_diagnostics(tmp_path,monkeypatch,kind,code,finis
     assert event['response_metadata']['finish_category']==finish
     assert event['response_metadata']['content_availability']==availability
     assert event['diagnostics']['failure_code'] in {'truncated_output','empty_output','unusable_response','invalid_json','invalid_report_contract'}
-    assert runner.outcome_status([],{},[event],None)=='PROVIDER_FAILURE'
+    assert runner.outcome_status([],{},[event],None)==('FAIL' if kind in {'json','schema'} else 'PROVIDER_FAILURE')
     assert 'private-marker' not in json.dumps(a.state)+(tmp_path/'telemetry.jsonl').read_text()
 
 
@@ -255,9 +255,9 @@ def test_prompt_contrasts_reach_gateway_without_overriding_output(monkeypatch):
         gateway=GeminiGateway(SETTINGS)
         def generate(prompt,*args):
             assert len(prompt)<12000
-            assert 'Do not guess average_customer_spend' in prompt
-            assert 'no next year inferred' in prompt
-            assert 'offset one (Q1 2026)' in prompt
+            assert 'Unqualified regional spend => clarify total versus average' in prompt
+            assert 'Unspecified recommendations/actions => action null' in prompt
+            assert 'Q4 2025 becomes Q1 2026' in prompt
             return defaults_reply(c)
         monkeypatch.setattr(gateway,'_generate',generate)
         value=gateway.interpret(c['message'],previous_plan=None,reference_date='2026-11-05',analytical_timezone='UTC')

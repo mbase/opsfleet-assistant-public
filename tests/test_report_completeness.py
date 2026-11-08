@@ -391,7 +391,7 @@ def test_report_schema_bars_free_prose_and_period_injection():
             ReportSpec.model_validate(payload)
     schema = _strict_schema(I)
     assert schema["$defs"]["ReportSpec"]["additionalProperties"] is False
-    assert "report" in schema["$defs"]["RequestSpec"]["properties"]
+    assert "report" in schema["$defs"]["ProviderRequestSpec"]["properties"]
 
 
 def test_incomplete_temporal_report_retains_observations_as_partial(harness):

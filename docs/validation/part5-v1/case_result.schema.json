@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sanitized owner-run case record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario",
+    "case_id",
+    "status",
+    "attempts",
+    "retries",
+    "cost_usd",
+    "billed_bytes"
+  ],
+  "properties": {
+    "scenario": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "PROVIDER_FAILURE",
+        "BLOCKED_ENVIRONMENT",
+        "NOT_RUN"
+      ]
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ordinal",
+          "outcome",
+          "latency_seconds",
+          "checks",
+          "provider_calls",
+          "warehouse_jobs"
+        ],
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "latency_seconds": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "passed"
+              ],
+              "properties": {
+                "passed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "provider_calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "warehouse_jobs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "first_semantic_status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NOT_RUN"
+            ]
+          },
+          "workflow_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "retries": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cost_usd": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "billed_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  }
+}

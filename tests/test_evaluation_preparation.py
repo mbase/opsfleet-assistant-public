@@ -348,7 +348,7 @@ def test_live_warehouse_guard_path_with_substituted_transport_and_independent_re
     a.end_turn()
 
 
-def test_report_contract_failure_remains_provider_failure_even_with_checked_fallback(tmp_path,monkeypatch):
+def test_report_contract_failure_remains_fail_even_with_checked_fallback(tmp_path,monkeypatch):
     request=RequestSpec(analysis=TemporalExpression(kind='month',month=1,year=YearExpression(kind='absolute',value=2025)),
         queries=(QuerySpec(operation='aggregate',metric='revenue',revenue_statuses=('Complete',)),))
     http_transport(monkeypatch,[InterpretationResult(status='ready',request=request).model_dump_json(),'malformed-report'])
@@ -357,7 +357,7 @@ def test_report_contract_failure_remains_provider_failure_even_with_checked_fall
        'lifecycle_clock':'2026-11-05T12:00:00+00:00','depends_on':[],'assertions':[{'path':'status','op':'eq','value':'ok'}]}
     c={'id':'fall','owner':'manager_apparel','mode':'live_fixture','turns':[t]}
     rows=execute(a,{'scenarios':[c]},tmp_path,live=True,settings=SETTINGS)
-    assert rows[0]['status']=='PROVIDER_FAILURE'
+    assert rows[0]['status']=='FAIL'
     assert rows[0]['attempts'][0]['observed']['status']=='ok'  # useful fallback retained
     assert a.state['used']['provider_attempts']==2
     assert a.state['events'][-1]['outcome']=='failed'

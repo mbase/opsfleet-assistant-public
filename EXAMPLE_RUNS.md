@@ -194,3 +194,30 @@ opsfleet conversations --unknown --user manager_apparel --json
 ```
 
 Each exits 2 with one `invalid_command` envelope on stdout, without opening the store or invoking model/catalog dependencies. Non-JSON argument errors retain the normal usage convention. Saved report text/title must exactly match the versioned trusted format derived from its original validated support; changing only text plus its recomputable checksum makes read/list/replay/preview unavailable. Compatible pre-contract reports retain their original bytes and timing; unsupported text formats fail closed.
+
+
+## Part 5 evaluator journey and recovery
+
+From the documented editable runtime/test install:
+
+```sh
+python scripts/offline_check.py golden
+python scripts/offline_check.py playbooks
+python scripts/offline_check.py navigation
+```
+
+These commands need no provider credentials. All three playbooks show independent synthetic references: product difference 400 = volume 550 + price −150; purchaser-spend difference 20 = frequency 65 + value −45; churn change .11 = mix .01 + within .10 (11 percentage points). Partial cases withhold unavailable attribution; no missing denominator becomes zero. Navigation reopens exact saved content after restart, checks scope/expiry/corruption, and exercises cancellation then exact confirmation. Tokens remain redacted in the demo summary.
+
+Sanitized supported recovery examples (controlled offline faults):
+
+| Trigger | Observed bounded behavior | Useful next step |
+| --- | --- | --- |
+| Transient dry-run failure before submission | One classified retry; success counted after evidence release | Continue with the checked result |
+| Approved synthetic price-field migration | One schema inspection, changed binding, unchanged scope/status/date semantics | Review the synthetic binding evidence |
+| Persistent SQL template defect | Stop; no identical recompilation called a correction | Fix the trusted compiler, then start a new request |
+| Ambiguous warehouse submission | Stop without replay; billing can remain unknown | Inspect the original job before another submission |
+| Genuinely empty population | Preserve filters; no invented measurement | Choose another explicitly requested period or scope |
+
+Reproduce the recovery matrix with `python scripts/offline_check.py tests tests/test_recovery_1a.py tests/test_recovery_1b.py`. The synthetic binding is not an observed public migration, and general SQL syntax self-correction remains unsupported.
+
+Real-model, live warehouse and human results have not been collected for Part 5. See [owner-terminal commands and preflight requirements](docs/validation/part5-v1/COMMANDS.md); the default/dry paths make zero network calls.

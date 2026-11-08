@@ -1,0 +1,35 @@
+name: Offline acceptance
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13']
+    env:
+      OPSFLEET_LIVE_TESTS: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install documented editable runtime and tests
+        run: |
+          python -m pip install --index-url https://pypi.org/simple -c requirements.part5.lock setuptools==82.0.1
+          python -m pip install --index-url https://pypi.org/simple --no-build-isolation -c requirements.part5.lock -e '.[test]'
+          python -m pip check
+      - name: Verify with external transports disabled
+        run: |
+          cp docs/validation/part5-v1/candidate_manifest.json "$RUNNER_TEMP/opsfleet-candidate-before-ci.json"
+          python scripts/prepare_part5_validation.py --freeze
+          python scripts/offline_check.py help
+          python scripts/offline_check.py schema
+          python scripts/offline_check.py tests
+          python scripts/offline_check.py golden
+          python scripts/offline_check.py playbooks
+          python scripts/offline_check.py navigation
