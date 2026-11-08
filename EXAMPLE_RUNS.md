@@ -124,9 +124,9 @@ Did 90-day inactivity churn rise at April 1, 2025 versus January 1, 2025? Invest
 Save that exact analysis.
 ```
 
-Products must be authorized catalog IDs. State is the only regional playbook dimension; country is the only churn segment. “All registered users” requires clarification rather than silently switching denominator. Actions are proposals, and current item statuses can restate historical results. See [implementation evidence and limits](docs/PART_2_IMPLEMENTATION_REPORT.md).
+Products must be authorized catalog IDs. State is the only regional playbook dimension; country is the only churn segment. “All registered users” requires clarification rather than silently switching denominator. Actions are proposals, and current item statuses can restate historical results. These contracts and synthetic expected values define the offline demonstration; the prototype does not make causal claims or infer unsupported populations.
 
-Part 2 review revisions keep the overall churn premise consistent with supporting facts: the synthetic source spike is +11 points, and a draft comparing baseline country B against baseline country A is rejected into that checked fallback. Product 2 minus product 1 produces -400 in both default revenue findings and the driver; Texas minus California produces +20 in both spend findings and the driver. Fully withheld populations display “No safely releasable observations,” never source-empty. Reports with missing mandatory playbook support refuse replay. These are offline regression results, awaiting re-review; they do not authorize Part 3 or live evaluation.
+The synthetic checks include a +11-point churn change, ordered product and state comparisons, all-or-nothing country detail withholding, and refusal to replay reports without required playbook support. Fully withheld populations display “No safely releasable observations,” never source-empty. Parts 2 and 3 are owner-accepted within their documented prototype scopes.
 
 ## Part 3 evaluator journey: historical reports and local confirmation
 
@@ -185,7 +185,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src OPSFLEET_LIVE_TESTS=0 .venv/bin/python 
 This real-CLI synthetic demonstration recreates process adapters/store connections, checks exact read/precision and resume/save, expired readable reports with blocked expired save, other-owner/revoked/corrupt/unavailable-catalog cases, and human preview/cancel/confirm. It prints assertion summaries with tokens redacted. It is offline verification, not live-provider or human usability certification.
 
 
-Part 3 review revision: even pre-dispatch argument failures return structured JSON:
+JSON command validation: even pre-dispatch argument failures return structured JSON:
 
 ```sh
 opsfleet report not-an-id --user manager_apparel --json
@@ -220,4 +220,4 @@ Sanitized supported recovery examples (controlled offline faults):
 
 Reproduce the recovery matrix with `python scripts/offline_check.py tests tests/test_recovery_1a.py tests/test_recovery_1b.py`. The synthetic binding is not an observed public migration, and general SQL syntax self-correction remains unsupported.
 
-Real-model, live warehouse and human results have not been collected for Part 5. See [owner-terminal commands and preflight requirements](docs/validation/part5-v1/COMMANDS.md); the default/dry paths make zero network calls.
+Recorded trials include a 45-case synthetic-input model interpretation run (45/45 first-semantic and final-workflow passes), a 29-assertion public-warehouse smoke check (four jobs, 80 MiB billed), and a 16-turn legacy behavior smoke check. Broader warehouse acceptance, remote CI execution and representative human usability remain unverified. See [owner-terminal commands and preflight requirements](docs/validation/part5-v1/COMMANDS.md); default/help/dry paths make zero network calls.

@@ -18,6 +18,14 @@ python scripts/offline_check.py navigation
 
 Use `python3.13` for the other supported interpreter. These commands do not require provider credentials. The offline wrapper drops inherited provider/project/ADC selectors, isolates HOME/telemetry, suppresses root dotenv reads and blocks socket/DNS transports. Dependency installation contacts public PyPI. Package version constraints pin runtime/test/build dependencies to the accepted observed resolution; artifact hashes are not a complete package supply-chain lock. Pip bootstrap comes from the chosen interpreter's ensurepip. Runtime and tests share this one supported constraint route; the test extra adds pytest. `requirements.txt` remains an unconstrained editable convenience entry and `requirements.step4.lock` remains historical.
 
+Ordinary regression tests need no preliminary `--freeze`. The guarded wrapper
+creates a temporary `LOCAL_TEST_IDENTITY` manifest with no approval grants from
+the current inventory and Git identity (when present). The same workflow supports
+source copies without `.git`, including the fresh-copy checker below. It never
+rewrites the tracked candidate or archived live records, even when tests fail.
+The SQL equality correction and temporary-manifest changes were checked offline
+only; prior live observations do not validate this changed source.
+
 Fresh isolated install/copy checks (never alter an existing environment or install an interpreter):
 
 ```sh
@@ -37,7 +45,7 @@ validation. Stored requests, plans and snapshots keep their existing format.
 Array length constraints are enforced locally rather than in the provider
 schema. Invalid/oversized replies still fail the interpretation contract; there
 is no truncation, inferred population, schema fallback or automatic paid retry.
-Provider acceptance of this revision remains unverified until a new owner run.
+A recorded 45-case synthetic-input interpretation trial is summarized in `acceptance_report.md`. It is a finite observation, not general provider/model reliability evidence; independent paraphrase review and owner acceptance remain separate gates.
 
 The provider budget charges known settled costs plus a worst-case reservation
 for each in-flight call and the next proposed call. Unused reservations are
