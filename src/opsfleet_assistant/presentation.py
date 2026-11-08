@@ -20,7 +20,7 @@ from .evidence import Evidence, protected_unavailable, PROTECTED_UNAVAILABLE_TEX
 from .reporting import GroundedReport, action_heading
 
 if TYPE_CHECKING:
-    from .workflow import TurnResult
+    from .turn_types import TurnResult
 
 
 class PresentationData(StrictModel):

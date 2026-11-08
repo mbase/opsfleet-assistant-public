@@ -11,7 +11,8 @@ import typer
 
 from .config import Settings
 from .store import SQLiteStore, StoreFailure
-from .workflow import AssistantWorkflow, SCHEMA_HELP, TurnResult
+from .workflow import AssistantWorkflow, SCHEMA_HELP
+from .turn_types import TurnResult
 from .telemetry import agent_metrics
 from .presentation import render_result, render_navigation
 from .navigation import NavigationResult, NavigationFailure

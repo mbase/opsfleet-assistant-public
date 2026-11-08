@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
 import time
-from typing import Any, Mapping, Sequence
+from types import MethodType
+from typing import Callable, Any, Mapping, Sequence
 
 from google.api_core import exceptions as google_errors
 import google.auth
@@ -194,14 +195,38 @@ class BigQueryTurn:
         self._schema_inspection_started = False
         self._inspected_binding = None
 
+    @property
+    def deadline(self) -> float:
+        return getattr(self, "_turn_deadline", self._started + self.limits.turn_seconds)
+
+    def bind_deadline(self, clock: Callable[[], float], deadline: float) -> None:
+        """Bind once, before dispatch, to the application's original turn clock."""
+        if hasattr(self, "_turn_deadline"):
+            raise ValueError("warehouse_turn_already_started")
+        if self.executions or self.dry_runs:
+            # A composition root may have done scoped discovery on this turn.
+            # Keep its counts and original deadline; only tighten the allowance.
+            # Accessing a Python bound method creates a new method object.
+            # Compare its instance/function identities, never arbitrary callable equality.
+            same_clock = clock is self._clock or (
+                isinstance(clock, MethodType) and isinstance(self._clock, MethodType)
+                and clock.__self__ is self._clock.__self__
+                and clock.__func__ is self._clock.__func__)
+            if not same_clock:
+                raise ValueError("warehouse_clock_changed_after_dispatch")
+        else:
+            self._clock = clock
+            self._started = clock()
+        self._turn_deadline = min(deadline, self._started + self.limits.turn_seconds)
+
     def _remaining_seconds(self) -> float:
-        remaining = self.limits.turn_seconds - (self._clock() - self._started)
+        remaining = self.deadline - self._clock()
         if remaining <= 0:
             raise ExecutionError("turn_timeout")
         return min(self.limits.job_seconds, remaining)
 
     def _check_deadline(self, deadline: float | None = None) -> float:
-        remaining = self._started + self.limits.turn_seconds - self._clock()
+        remaining = self.deadline - self._clock()
         if deadline is not None:
             remaining = min(remaining, deadline - self._clock())
         if remaining <= 0:
@@ -260,7 +285,7 @@ class BigQueryTurn:
                     exc.category, exc.stage, exc.submission_state, max(self.retries, 2 if attempt else 0),
                     self.executions < self.limits.max_executions and self.dry_runs < self.limits.max_executions + 4
                     and self.billed_bytes < self.limits.per_turn_bytes and not self.billing_unknown,
-                    self._clock() - self._started < self.limits.turn_seconds))
+                    self._clock() < self.deadline))
                 exc.purpose = purpose
                 outcome = "attempted" if decision.action == "retry_before_submission" else terminal_outcome(decision)
                 recovery = RecoveryOutcome(decision.action, decision.reason, outcome)
@@ -385,7 +410,7 @@ class BigQueryTurn:
             elif not billed_recorded:
                 self.billing_unknown = True
                 self.billed_bytes += cap
-            if isinstance(exc, (TimeoutError, google_errors.DeadlineExceeded)) or self._clock() - self._started >= self.limits.turn_seconds:
+            if isinstance(exc, (TimeoutError, google_errors.DeadlineExceeded)) or self._clock() >= self.deadline:
                 failure = ExecutionError("timeout_cancellation_requested" if cancellation_requested else "warehouse_timeout", "transient")
             else:
                 failure = _classify(exc)
@@ -432,7 +457,7 @@ class BigQueryTurn:
                     fields[field.name] = (kind, field.mode.upper())
                 schemas[table] = fields
             except Exception as exc:
-                failure = (ExecutionError("turn_timeout") if self._clock() - self._started >= self.limits.turn_seconds
+                failure = (ExecutionError("turn_timeout") if self._clock() >= self.deadline
                            else _classify(exc))
                 failure.stage = "metadata"
                 failure.submission_state = SubmissionState.NOT_SUBMITTED

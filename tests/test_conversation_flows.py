@@ -499,14 +499,15 @@ def test_explanation_after_investigation_reuses_both_executed_plans(harness):
 
 def test_all_work_after_interpretation_uses_original_turn_deadline(harness, monkeypatch):
     script, _, store, workflow, _ = harness
-    import opsfleet_assistant.workflow as module
+    from types import SimpleNamespace
     ticks = [0.0]
-    monkeypatch.setattr(module, "ModelBudget", lambda: ModelBudget(seconds=1, clock=lambda: ticks[0]))
+    assistant = workflow()
+    assistant.clock = SimpleNamespace(monotonic=lambda: ticks[0], now=store._now)
     def slow_interpretation(kwargs):
-        ticks[0] = 2.0
+        ticks[0] = 121.0
         return analysis()
     script["Revenue in 2025"] = slow_interpretation
-    result = workflow().run(OWNER, "Revenue in 2025")
+    result = assistant.run(OWNER, "Revenue in 2025")
     assert result.status == "error" and "turn_timeout" in result.text
     assert result.model_requests == 1 and result.query_executions == 1 and OracleTurn.queries == []
 

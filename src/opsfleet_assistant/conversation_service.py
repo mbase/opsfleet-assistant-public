@@ -1,5 +1,13 @@
 """Owner-only metadata and selection; never restores or redates evidence."""
+from __future__ import annotations
 from dataclasses import dataclass, asdict
+from datetime import timedelta
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .turn_session import TurnSession
+from .contracts import CohortOrigin, Operation, RequestSpec, InterpretationIssue
+from .conversation import AnalysisSnapshot, PendingTemporalResolution, SafeMessage, history, safe_spec
+from .store import SQLiteStore
 from uuid import uuid4
 from pydantic import ValidationError
 from .conversation import ConversationContext
@@ -14,7 +22,7 @@ class ConversationMetadata:
 
 
 class ConversationService:
-    def __init__(self, store):
+    def __init__(self, store: SQLiteStore):
         self.store = store
 
     def _availability(self, raw):
@@ -51,3 +59,29 @@ class ConversationService:
         self.store.create_conversation(owner, conversation_id)
         return NavigationResult('new', active_conversation=conversation_id,
             message='Fresh conversation created. Previous saved work is retained.')
+
+    def updated_context(self, turn: TurnSession, *, pending: RequestSpec | None = None,
+                        pending_resolution: PendingTemporalResolution | None = None,
+                        issues: tuple[InterpretationIssue, ...] = (), snapshot: AnalysisSnapshot | None = None,
+                        clarification: str | None = None, preserve_expiry: bool = False,
+                        reset_history: bool = False) -> ConversationContext:
+        assert turn.active_scope is not None
+        now = turn.store._now()
+        messages = (turn.continuity.messages if turn.continuity and not reset_history else ()) + (SafeMessage(role="user", content=turn.clean_question),)
+        if clarification:
+            messages += (SafeMessage(role="assistant", content=clarification),)
+        messages = history(messages, max_messages=turn.settings.history_max_messages,
+                           max_chars=turn.settings.history_max_chars)
+        demographic = turn.cohort == CohortOrigin.DEMOGRAPHIC
+        if pending and any(q.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE} for q in pending.queries):
+            demographic = True
+        if snapshot and any(p.operation in {Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE} for p in snapshot.plans):
+            demographic = True
+        return ConversationContext(owner=turn.context.owner, identity_digest=turn.identity_digest,
+            authorization_version=turn.active_scope.authorization_version, catalog_digest=turn.catalog_digest,
+            identity_brands=tuple(sorted(turn.active_scope.brands)), identity_role=turn.active_scope.role.value,
+            created_at=turn.continuity.created_at if preserve_expiry and turn.continuity else now,
+            expires_at=turn.continuity.expires_at if preserve_expiry and turn.continuity else now + timedelta(seconds=turn.settings.context_ttl_seconds),
+            cohort_origin=CohortOrigin.DEMOGRAPHIC if demographic else CohortOrigin.BUSINESS,
+            messages=messages, pending=safe_spec(pending), pending_resolution=pending_resolution,
+            issues=issues, snapshot=snapshot)
