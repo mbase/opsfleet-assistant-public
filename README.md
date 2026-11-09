@@ -23,9 +23,10 @@ python -m pip install --index-url https://pypi.org/simple --no-build-isolation -
 test -f .env || cp .env.example .env
 ```
 
-The supported reproducible route is clone + editable runtime/test installation with [Part 5 constraints](requirements.part5.lock), on Python 3.12 or 3.13. It preserves the accepted transitive versions; build isolation is disabled after installing the pinned backend. Standalone wheels are not supported because configuration/resources are source-relative. The constraints freeze versions, not every registry artifact hash. `requirements.txt` is an editable convenience entry; `requirements.step4.lock` is a historical observed environment. The user's untracked `uv.lock` was inspected read-only and remains unadopted: it matches direct metadata but resolves different transitive versions. See the [lock audit](docs/validation/part5-v1/lock_audit.json).
+The supported installation is an editable checkout on Python 3.12 or 3.13 using the [runtime and test constraints](requirements.part5.lock). Install the pinned build backend first, then install the project without build isolation as shown above. Configuration and resources are source-relative, so standalone wheel installation is unsupported. The constraints pin package versions without artifact hashes. `requirements.txt` is an editable convenience entry; `requirements.step4.lock` is a historical dependency snapshot.
 
-Fresh local installs are checked separately from CI; validation layers and acceptance gates are described in the [Part 5 specification](docs/validation/part5-v1/SCENARIOS.md). Offline checks need no cloud credentials. Configure the following only for an explicitly approved live session.
+Offline checks need no cloud credentials. Configure the following for live model and BigQuery use. The [validation specification](docs/validation/part5-v1/SCENARIOS.md) describes installation, interpretation, warehouse and usability checks separately.
+
 Supply your own values in `.env`. Environment variables override `.env.local`, which overrides `.env`. Secret files are ignored by Git.
 
 | Variable | Purpose |
@@ -109,13 +110,15 @@ python scripts/offline_check.py playbooks
 python scripts/offline_check.py navigation
 ```
 
-Ordinary tests build a temporary current-source manifest through the same freeze/identity implementation, including Git identity when available and the full input inventory in source copies without Git. This local test identity grants no approvals and is removed after verification; tracked candidate manifests and archived results are unchanged. No preliminary freeze is required. Intentional evaluation plans still use the explicit freeze commands in [COMMANDS](docs/validation/part5-v1/COMMANDS.md).
+The test wrapper builds a temporary source manifest automatically; no preparation step is required. It works in both Git checkouts and source copies. For a version-bound live evaluation, use the explicit preparation commands in the [validation guide](docs/validation/part5-v1/COMMANDS.md).
 
 The wrapper forces `OPSFLEET_LIVE_TESTS=0`, drops inherited provider/project/ADC selectors, isolates local state/telemetry, suppresses repository dotenv reads and blocks network transports. The demos exercise the real CLI/workflow with injected interpretation/warehouse adapters and disposable synthetic state. Playbooks show independently checked complete/partial components; navigation saves, restarts, reads, resumes and confirms/cancels deletion. They do not establish model accuracy, live warehouse behavior or human usability.
 
-[Part 5 validation](docs/validation/part5-v1/SCENARIOS.md) separates deterministic cases, clean installs, real-model fixture interpretation, live warehouse journeys and human observations. The [offline CI matrix](.github/workflows/offline.yml) covers Python 3.12/3.13; remote execution remains unverified. [Exact install and owner-terminal trial commands](docs/validation/part5-v1/COMMANDS.md) include the guarded live opt-ins. Live execution requires explicit approval of its scope and limits. Recorded finite trials include a 45-case synthetic-input model interpretation run with 45 first-semantic and final-workflow passes, a 29-assertion public-warehouse smoke check, and a 16-turn legacy behavior smoke check. They do not establish broad warehouse acceptance, remote CI success, or representative human usability. Overall Part 5 acceptance remains incomplete.
+On 9 November 2026, the offline suite at application revision `681b855` passed **1,578 tests with two opt-in integrations skipped**. A fresh Python 3.13 installation also passed dependency checks, CLI help/schema, all three demos and its offline suite (1,576 passed, four skipped; the source copy omits Git metadata). The [offline CI workflow](.github/workflows/offline.yml) defines Python 3.12/3.13 jobs; remote execution remains unverified.
 
-Generated execution results, historical run archives and local session reports are excluded from version control. The repository includes the validation code, schemas, authored scenarios, synthetic source fixtures and offline CI workflow. Keep each local run's source identity, first attempts and evidence separate when comparing behavior; do not relabel historical runs as results for a new revision.
+Earlier revisions recorded a 45-case synthetic-input model trial with 45 first-semantic and final-workflow passes, a 29-assertion public-warehouse smoke check, and a 16-turn behavior smoke check. These are historical observations, not live verification of the current revision. Broad warehouse acceptance and representative human usability remain unverified. See the [verification summary](docs/validation/part5-v1/acceptance_report.md) and [bounded live evaluation commands](docs/validation/part5-v1/COMMANDS.md).
+
+The repository includes validation code, schemas, authored scenarios, synthetic fixtures and the offline CI workflow. Generated run output stays outside version control. Evaluation records bind results to their source revision so historical observations remain distinguishable from current checks.
 
 ## Definitions and limits
 
@@ -127,7 +130,7 @@ Generated execution results, historical run archives and local session reports a
 - OpenRouter Gemini shares the model family and is not independent provider redundancy. Optional Presidio runtime remains unverified. Sanitized JSONL telemetry is best effort, not a durable audit log; `opsfleet metrics` derives local counters.
 - Persistent preference learning, a production Golden pipeline, nondeveloper persona administration and chart/email/web tools are [production designs](HLD.md), not implemented prototype features.
 
-Recovery increments 1A–1B: only classified transient dry-run failures before submission receive a bounded retry. Submitted or ambiguous jobs are never automatically replayed; unknown billing remains unknown. A pre-submission schema rejection permits one metadata inspection cycle (at most four table requests) and a correction only through a reviewed compatible source binding. Production ships only the public v1 binding; unknown schemas and unsupported or persistent syntax defects stop safely. Empty populations keep the original filters. A synthetic approved migration demonstrates schema correction offline; no live schema migration is claimed.
+Warehouse recovery: only classified transient dry-run failures before submission receive a bounded retry. Submitted or ambiguous jobs are never automatically replayed; unknown billing remains unknown. A pre-submission schema rejection permits one metadata inspection cycle (at most four table requests) and a correction only through a reviewed compatible source binding. Production ships only the public v1 binding; unknown schemas and unsupported or persistent syntax defects stop safely. Empty populations keep the original filters. A synthetic approved migration demonstrates schema correction offline; no live schema migration is claimed.
 
 
 SQL recovery supports one narrow representation correction: compiler-owned equality
@@ -144,11 +147,11 @@ coverage interpretation. This recovery path was verified offline with synthetic
 source rows only; real provider/dialect behavior on this revision is unverified,
 and previous live results describe their original source versions.
 
-Recovery preserves separate analysis and diagnostic provenance in JSON; `--verbose` shows safe stage, submission, job reference and known/unknown billing. Submitted or uncertain timeout guidance asks you to inspect job status before another submission. SDK page requests share the remaining job/turn deadline, and recovery success is counted once after validated evidence. Unaffected queries may reuse an inspected binding without claiming another correction. Parts 1–4 are owner-accepted within their documented prototype scopes; general SQL syntax self-correction and production readiness are not claimed.
+Recovery preserves separate analysis and diagnostic provenance in JSON; `--verbose` shows safe stage, submission, job reference and known/unknown billing. Submitted or uncertain timeout guidance asks you to inspect job status before another submission. SDK page requests share the remaining job/turn deadline, and recovery success is counted once after validated evidence. Unaffected queries may reuse an inspected binding without claiming another correction. General SQL syntax self-correction and production readiness remain outside the verified prototype scope.
 
-## Bounded analytical investigations (Part 2)
+## Bounded analytical investigations
 
-Part 2 implements three version-1 playbooks, owner-accepted with documented limits:
+The prototype implements three version-1 analytical playbooks:
 
 - **Product revenue:** “Investigate why product 101 revenue differs from product 202 in Q1 2025.” IDs are illustrative: both must exist in the authorized catalog. Compares the first product minus the second and measures qualifying item-volume and average-item-price components. Higher volume can offset lower price; no currency or business cause is inferred.
 - **Regional purchaser spend:** “Investigate the spend-per-purchaser difference between Texas and California in Q1 2025.” State only; denominator is qualifying purchasers, with distinct orders containing scoped qualifying items. All registered users are unsupported and require clarification. Separates order frequency/order value from revenue and population-size differences.
@@ -166,11 +169,11 @@ Run the reproducible synthetic demonstration (test dependencies required):
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src OPSFLEET_LIVE_TESTS=0 .venv/bin/python scripts/part2_offline_cli_demo.py
 ```
 
-It invokes the real CLI/workflow/compiler/adapter using injected interpretation and independently populated SQLite source rows, disposable report storage, network blocking and isolated telemetry. Expected and actual components, partial cases, and save/restart replay checks are printed. This does not verify real-model interpretation or BigQuery dialect/type behavior. The independent expected values and offline CLI journey are documented in [synthetic analytical examples](EXAMPLE_RUNS.md#part-2-offline-analytical-investigations). No live calls or deployment are part of this synthetic demo.
+It invokes the real CLI/workflow/compiler/adapter using injected interpretation and independently populated SQLite source rows, disposable report storage, network blocking and isolated telemetry. Expected and actual components, partial cases, and save/restart replay checks are printed. This does not verify real-model interpretation or BigQuery dialect/type behavior. The independent expected values and offline CLI journey are documented in [synthetic analytical examples](EXAMPLE_RUNS.md#offline-analytical-investigations). No live calls or deployment are part of this synthetic demo.
 
-Playbook findings follow the requested comparison direction, preserve supported saved-report versions, and fail closed when required support is unavailable. Withheld cohorts are described as absent or withheld, never as source-empty. Parts 2 and 3 are owner-accepted within their documented prototype scopes.
+Playbook findings follow the requested comparison direction, preserve supported saved-report versions, and fail closed when required support is unavailable. Withheld cohorts are described as absent or withheld, never as source-empty.
 
-## Saved work navigation (Part 3)
+## Saved work navigation
 
 ```sh
 opsfleet reports --user manager_apparel --limit 5 --db PATH_TO_DISPOSABLE_SQLITE --json
@@ -211,4 +214,4 @@ Run the isolated evaluator journey without credentials or live calls:
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src OPSFLEET_LIVE_TESTS=0 .venv/bin/python scripts/part3_offline_cli_demo.py
 ```
 
-It saves, recreates CLI/store instances, lists/reads, resumes/saves, checks expiry/revocation/unavailable catalog/corruption, then cancels and confirms in human chat. Output redacts capability values. Parts 2, 3 and 4 are owner-accepted with their recorded offline verification limits. See the [saved-work examples and offline journey](EXAMPLE_RUNS.md#part-3-evaluator-journey-historical-reports-and-local-confirmation).
+It saves, recreates CLI/store instances, lists/reads, resumes/saves, checks expiry/revocation/unavailable catalog/corruption, then cancels and confirms in human chat. Output redacts capability values. See the [saved-work examples and offline journey](EXAMPLE_RUNS.md#saved-work-walkthrough-historical-reports-and-local-confirmation).

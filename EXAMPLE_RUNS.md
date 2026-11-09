@@ -60,7 +60,7 @@ opsfleet ask 'Save that exact analysis' --user manager_apparel --db PATH_TO_DISP
 
 An unchanged save uses the valid released snapshot. Inspect `report_id`, reuse/completeness and original dates/figures. A later six-turn live journey verified a February 2024 correction and exact save; the initial save interpretation was compact.
 
-If the save also requests a different year, filter, metric, status, action horizon or report layout, the prototype clarifies and saves nothing. Request the changed analysis or report separately, review it, then exact-save. A report-only difference can cause one bounded reinterpretation; explicit or unresolved changes remain unsaved. Final application-source narrow/zero live checks verified four complete turns and 151 assertions, including both safe modified-save clarifications. Successful repair of an expanded unchanged-save interpretation is offline-tested only. See [save guard tests](tests/test_modified_save_guard.py) and [repair tests](tests/test_save_interpretation_repair.py).
+If the save also requests a different year, filter, metric, status, action horizon or report layout, the prototype clarifies and saves nothing. Request the changed analysis or report separately, review it, then exact-save. A report-only difference can cause one bounded reinterpretation; explicit or unresolved changes remain unsaved. Historical limited live checks recorded four complete turns and 151 assertions, including both safe modified-save clarifications; these results do not verify the current revision. Successful repair of an expanded unchanged-save interpretation is offline-tested only. See [save guard tests](tests/test_modified_save_guard.py) and [repair tests](tests/test_save_interpretation_repair.py).
 
 ## Owner-bound deletion
 
@@ -95,7 +95,7 @@ Ambiguous requests clarify; empty data is not invented zero revenue; unsafe requ
 
 [README verification](README.md#offline-verification) states the offline/live scope and historical full-evaluation limits. [Technical design](TECHNICAL_DESIGN.md#7-evaluation-method-and-verification-limits) explains numerical/report checks and the proposed human UX study. No participant usability study was performed.
 
-## Part 2 offline analytical investigations
+## Offline analytical investigations
 
 These are synthetic demonstrations, not live business observations. Run:
 
@@ -115,7 +115,7 @@ The source churn fixture has baseline country eligibility 600/400 and inactivity
 
 Three additional cases remove a qualifying product, withhold a state cohort below five purchasers, and introduce a small country. Product/state comparisons then have no measured decomposition. Churn omits all country detail together while preserving a safe headline comparison; residual and segment contributions are absent. Saves retain partial completeness through restart replay. Every ordinary source path uses three warehouse executions; save/replay adds only catalog authorization, no fresh business measurement. Proposed actions identify a checked component, investigation and measure, and make no claim about stockouts, campaigns or causal effects.
 
-Illustrative live-style prompts (not executed during Part 2 implementation):
+Illustrative prompts; the figures above come from offline fixtures:
 
 ```text
 Investigate the revenue difference between product 101 and product 202 in Q1 2025.
@@ -126,9 +126,9 @@ Save that exact analysis.
 
 Products must be authorized catalog IDs. State is the only regional playbook dimension; country is the only churn segment. “All registered users” requires clarification rather than silently switching denominator. Actions are proposals, and current item statuses can restate historical results. These contracts and synthetic expected values define the offline demonstration; the prototype does not make causal claims or infer unsupported populations.
 
-The synthetic checks include a +11-point churn change, ordered product and state comparisons, all-or-nothing country detail withholding, and refusal to replay reports without required playbook support. Fully withheld populations display “No safely releasable observations,” never source-empty. Parts 2 and 3 are owner-accepted within their documented prototype scopes.
+The synthetic checks include a +11-point churn change, ordered product and state comparisons, all-or-nothing country detail withholding, and refusal to replay reports without required playbook support. Fully withheld populations display “No safely releasable observations,” never source-empty.
 
-## Part 3 evaluator journey: historical reports and local confirmation
+## Saved-work walkthrough: historical reports and local confirmation
 
 Use one synthetic disposable database throughout. These command templates may need a current catalog connection for report disclosure, but navigation never asks a model or reruns business analysis. The offline script below supplies injected adapters instead.
 
@@ -196,7 +196,7 @@ opsfleet conversations --unknown --user manager_apparel --json
 Each exits 2 with one `invalid_command` envelope on stdout, without opening the store or invoking model/catalog dependencies. Non-JSON argument errors retain the normal usage convention. Saved report text/title must exactly match the versioned trusted format derived from its original validated support; changing only text plus its recomputable checksum makes read/list/replay/preview unavailable. Compatible pre-contract reports retain their original bytes and timing; unsupported text formats fail closed.
 
 
-## Part 5 evaluator journey and recovery
+## Offline verification and recovery
 
 From the documented editable runtime/test install:
 
