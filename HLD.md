@@ -113,7 +113,7 @@ sequenceDiagram
   P-->>A: Up to 3 approved method summaries + IDs/versions
   A->>M: Minimized intent + method summaries, no raw SQL/data
   M-->>A: Typed InterpretationProposal / RequestSpec (no SQL or grants)
-  A->>A: Resolve temporal roles; validate playbook choices; build bounded plans
+  A->>A: Resolve temporal roles, validate playbook choices, build bounded plans
   A->>D: Authenticated service call + signed user context + plan
   D->>D: Recheck scope, validate fields, metric, parameters, limits, compile SQL
   D->>B: Dry run, byte cap, then idempotent query job
@@ -123,7 +123,7 @@ sequenceDiagram
   A->>A: Compute checked comparisons and playbook contributions
   A->>M: Released Evidence + checked components + allowed style, no tools
   M-->>A: Typed evidence-linked findings, hypotheses and action selections
-  A->>A: Ground selections; render facts, caveats and completeness in code
+  A->>A: Ground selections, render facts, caveats and completeness in code
   A->>P: Optional idempotent report save with owner, scope and evidence refs
   A-->>E: Answer/report + scope, as-of, completeness and trace ID
   Note over A,D: One 120s deadline, max 6 model calls, 8 executions, 512 MiB/job, 1 GiB/turn
