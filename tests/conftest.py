@@ -40,3 +40,26 @@ def offline_external_boundaries(monkeypatch):
         return {} if path.parent == config.ROOT and path.name in {'.env', '.env.local'} else original(path)
 
     monkeypatch.setattr(config, '_read_dotenv', isolated_settings)
+
+
+@pytest.fixture(scope='session', autouse=True)
+def current_test_manifest(tmp_path_factory):
+    """Direct pytest also uses a disposable identity, never the archived candidate."""
+    import importlib.util
+    import os
+    from pathlib import Path
+    import json
+    if 'OPSFLEET_TEST_MANIFEST' in os.environ:
+        yield
+        return
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location('test_manifest_builder', root / 'scripts/prepare_part5_validation.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    path = tmp_path_factory.mktemp('identity') / 'manifest.json'
+    path.write_text(json.dumps(module.build_manifest(local_test=True)))
+    os.environ['OPSFLEET_TEST_MANIFEST'] = str(path)
+    try:
+        yield
+    finally:
+        os.environ.pop('OPSFLEET_TEST_MANIFEST', None)

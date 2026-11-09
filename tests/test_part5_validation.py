@@ -2,6 +2,7 @@
 from copy import deepcopy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -18,8 +19,12 @@ from test_playbooks import spec, regional_spec, churn_spec
 AREA = ROOT / 'docs/validation/part5-v1'
 
 
+def manifest_path():
+    return Path(os.environ['OPSFLEET_TEST_MANIFEST'])
+
+
 def manifest():
-    return json.loads((AREA / 'candidate_manifest.json').read_text())
+    return json.loads(manifest_path().read_text())
 
 
 def specification():
@@ -49,7 +54,7 @@ def test_dry_paths_do_not_load_secrets_or_network(monkeypatch, capsys, layer):
     monkeypatch.setattr(runner, '_client_from_adc', forbidden)
     monkeypatch.setattr(runner, 'execute', forbidden)
     monkeypatch.setenv('OPENROUTER_API_KEY', 'private-sentinel-do-not-print')
-    args = ['--manifest', str(AREA / 'candidate_manifest.json'), '--run-id', 'dry-test', '--layer', layer]
+    args = ['--manifest', str(manifest_path()), '--run-id', 'dry-test', '--layer', layer]
     assert p5.main(args) == 0
     assert p5.main(args + ['--dry-run', '--live']) == 0
     assert 'private-sentinel' not in capsys.readouterr().out
@@ -318,7 +323,7 @@ def test_env_file_help_dry_and_unapproved_modes_never_read_file(tmp_path, monkey
     monkeypatch.setattr(p5.config, '_read_dotenv', forbidden)
     monkeypatch.setattr(p5, 'load_live_settings', forbidden)
     monkeypatch.setattr(runner, 'execute', forbidden)
-    args = ['--manifest', str(AREA / 'candidate_manifest.json'), '--run-id', 'env-dry-check',
+    args = ['--manifest', str(manifest_path()), '--run-id', 'env-dry-check',
             '--layer', 'interpretation', '--env-file', str(tmp_path / 'not-readable.env')]
     assert p5.main(args) == 0
     assert p5.main(args + ['--live', '--dry-run']) == 0
@@ -597,3 +602,41 @@ def test_p5_r2_terminal_rejects_shadow_package_before_application_import(tmp_pat
     else:
         assert result.returncode == 2 and b'invalid_frozen_input_inventory' in result.stderr
     assert not marker.exists()
+
+
+def test_temporary_identity_has_no_approval_or_acceptance_grants():
+    m = manifest()
+    assert m['status'] == 'LOCAL_TEST_IDENTITY'
+    assert not m['acceptance_complete']
+    assert m['review'] == {'owner_approved': False, 'paraphrases_independently_reviewed': False}
+    assert not m['warehouse']['same_snapshot_authorized']
+    assert all(m['provider'][k] is None for k in
+               ('estimated_cost_usd', 'cost_limit_usd', 'maximum_cost_per_call_usd'))
+    assert manifest_path().resolve().is_relative_to(Path(__import__('tempfile').gettempdir()).resolve())
+
+
+@pytest.mark.parametrize('key', ['application_head', 'application_tree'])
+def test_current_identity_still_rejects_mismatched_git_identity(key):
+    from opsfleet_assistant.evaluation_inventory import verify_inventory
+    if not (ROOT / '.git').exists():
+        pytest.skip('Git metadata absent; full source inventory remains verified')
+    source = deepcopy(manifest()['source'])
+    source[key] = '0' * 40
+    with pytest.raises(ValueError, match='application_head_or_tree_changed'):
+        verify_inventory(ROOT, source)
+
+
+def test_historical_candidate_still_rejects_actual_source_drift():
+    from opsfleet_assistant.evaluation_inventory import verify_inventory
+    archived = json.loads((AREA / 'candidate_manifest.json').read_text())
+    assert archived['source']['revision'] != manifest()['source']['revision']
+    with pytest.raises(ValueError):
+        verify_inventory(ROOT, archived['source'])
+
+
+@pytest.mark.parametrize('key', ['fixture_snapshot_sha256', 'metadata_sha256', 'driver_sha256', 'dependency_lock_sha256'])
+def test_current_identity_still_rejects_altered_frozen_fields(key):
+    bad = manifest()
+    bad[key] = '0' * 64
+    with pytest.raises(ValueError, match='frozen_field_mismatch'):
+        p5.validate(bad)

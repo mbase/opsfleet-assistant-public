@@ -1,5 +1,6 @@
 """Credential-free, network-disabled verification entry point (also used by CI)."""
 import argparse
+import json
 import os
 from pathlib import Path
 import runpy
@@ -24,6 +25,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('check', choices=('tests', 'help', 'schema', 'golden', 'playbooks', 'navigation'))
     args, extra = parser.parse_known_args(argv)
+    sys.dont_write_bytecode = True
     sys.path[:0] = [str(ROOT / 'src'), str(ROOT / 'tests')]
     def blocked(*a, **kw):
         raise RuntimeError('offline_transport_disabled')
@@ -42,6 +44,10 @@ def main(argv=None):
                 super().__init__(c, t, private / 'events.jsonl')
         workflow.TurnTrace = Trace
         if args.check == 'tests':
+            from prepare_part5_validation import build_manifest
+            manifest = private / 'local-test-manifest.json'
+            manifest.write_text(json.dumps(build_manifest(local_test=True)))
+            os.environ['OPSFLEET_TEST_MANIFEST'] = str(manifest)
             import pytest
             return pytest.main(['-q', '-p', 'no:cacheprovider', *extra])
         if extra:

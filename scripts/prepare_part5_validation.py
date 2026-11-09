@@ -3,19 +3,17 @@
 Does not install, dispatch providers, adopt uv.lock, or rewrite historical records.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import platform
-import subprocess
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-from opsfleet_assistant.evaluation_contracts import canonical, digest, MAX_CAPS
-from opsfleet_assistant.evaluation_inventory import POLICY, inventory, tracked_diff_hash
+from opsfleet_assistant.evaluation_contracts import digest, MAX_CAPS
+from opsfleet_assistant.evaluation_inventory import source_identity
 
 AREA = ROOT / 'docs/validation/part5-v1'
 
@@ -48,15 +46,9 @@ def lock_audit():
             'reason': 'Valid direct metadata; different transitive resolution from accepted environment. Part 5 pins preserve accepted versions; registry/install validation is separate.'}
 
 
-def freeze():
-    files = inventory(ROOT)
-    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], cwd=ROOT, text=True).strip()
-    source = {'files': files, 'revision': canonical(files), 'application_head': head, 'application_tree': tree,
-              'inventory_policy': POLICY,
-              'tracked_application_diff_sha256': tracked_diff_hash(ROOT),
-              'uncommitted': True, 'untracked_inputs_included': True,
-              'scope': 'Public executable/config/test/fixture inputs. Narrative reports/results and this manifest excluded to avoid recursion. Not a committed Part 5 application.'}
+def build_manifest(*, local_test=False):
+    source = source_identity(ROOT)
+    source['scope'] = 'Current public executable/config/test/fixture inputs; no approval grants.'
     value = {'schema_version': 2, 'version': 'part5-v1', 'source': source,
              'scenario_file': 'docs/validation/part5-v1/scenarios.json',
              'fixture_snapshot_sha256': digest(AREA / 'source_rows.json'),
@@ -79,8 +71,16 @@ def freeze():
                            'snapshot_timestamp': None, 'same_snapshot_authorized': False},
              'review': {'owner_approved': False, 'paraphrases_independently_reviewed': False},
              'status': 'BLOCKED_ENVIRONMENT', 'acceptance_complete': False}
+    if local_test:
+        value['status'] = 'LOCAL_TEST_IDENTITY'
+        value['command'] = 'python scripts/offline_check.py tests'
+    return value
+
+
+def freeze():
+    value = build_manifest()
     (AREA / 'candidate_manifest.json').write_text(json.dumps(value, indent=2) + '\n')
-    return source['revision']
+    return value['source']['revision']
 
 
 def project_junit(source, output):

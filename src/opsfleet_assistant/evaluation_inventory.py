@@ -81,6 +81,22 @@ def tracked_diff_hash(root):
     return hashlib.sha256(patch).hexdigest()
 
 
+def source_identity(root):
+    """Freeze the same complete inventory in checkouts and source-only copies."""
+    root = Path(root).resolve()
+    files = inventory(root)
+    source = {'files': files, 'revision': canonical(files), 'inventory_policy': POLICY,
+              'application_head': None, 'application_tree': None,
+              'tracked_application_diff_sha256': None,
+              'uncommitted': True, 'untracked_inputs_included': True}
+    if (root / '.git').exists():
+        for key, revision in (('application_head', 'HEAD'), ('application_tree', 'HEAD^{tree}')):
+            source[key] = subprocess.check_output(
+                ['git', 'rev-parse', revision], cwd=root, text=True).strip()
+        source['tracked_application_diff_sha256'] = tracked_diff_hash(root)
+    return source
+
+
 def verify_inventory(root, source):
     root = Path(root).resolve()
     if source.get('inventory_policy') != POLICY:

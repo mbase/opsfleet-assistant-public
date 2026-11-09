@@ -25,8 +25,6 @@ jobs:
           python -m pip check
       - name: Verify with external transports disabled
         run: |
-          cp docs/validation/part5-v1/candidate_manifest.json "$RUNNER_TEMP/opsfleet-candidate-before-ci.json"
-          python scripts/prepare_part5_validation.py --freeze
           python scripts/offline_check.py help
           python scripts/offline_check.py schema
           python scripts/offline_check.py tests

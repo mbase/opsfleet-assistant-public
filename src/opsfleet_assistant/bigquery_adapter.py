@@ -188,6 +188,7 @@ class BigQueryTurn:
         self._recovery_reported = False
         self._successful_retry_purposes: set[str] = set()
         self._pending_corrections: set[str] = set()
+        self._pending_syntax: set[str] = set()
         self._completed_jobs: dict[str, _Completed] = {}
         self.telemetry = None
         self._catalog: Catalog | None = None
@@ -263,8 +264,14 @@ class BigQueryTurn:
             connection.api_request = original
 
     def _recovery_success(self, query: CompiledQuery) -> None:
+        syntax = query._seal in self._pending_syntax
         correction = bool(self._pending_corrections) and execution_fingerprint(query) in self._pending_corrections
         self._check_deadline()
+        if syntax:
+            self._pending_syntax.remove(query._seal)
+            if self.telemetry:
+                self.telemetry.emit('recovery', action='correct_syntax', reason='syntax', outcome='success')
+            return
         if self._recovery_reported or not (correction or self._successful_retry_purposes):
             return
         self._recovery_reported = True
@@ -289,7 +296,7 @@ class BigQueryTurn:
                 exc.purpose = purpose
                 outcome = "attempted" if decision.action == "retry_before_submission" else terminal_outcome(decision)
                 recovery = RecoveryOutcome(decision.action, decision.reason, outcome)
-                if self.telemetry and exc.category != "query_schema_error":
+                if self.telemetry and exc.category not in {"query_schema_error", "query_syntax_error"}:
                     self.telemetry.emit("recovery", action=recovery.action,
                                         reason=recovery.reason, outcome=recovery.outcome)
                     exc.recovery_recorded = outcome != "attempted"
@@ -483,6 +490,18 @@ class BigQueryTurn:
             raise ExecutionError("recovery_scope_changed", stage="compile", submission_state=SubmissionState.NOT_SUBMITTED)
         return corrected
 
+    def correct_query_syntax(self, query: CompiledQuery, plan: AnalysisPlan, owner: str) -> CompiledQuery:
+        from .compiler import correct_syntax
+        self._check_deadline()
+        if not self.recovery_available():
+            raise ExecutionError('query_syntax_error')
+        catalog = self.load_catalog()
+        corrected = correct_syntax(query, plan, resolve_demo_scope(owner, catalog), catalog,
+                                   binding=self._binding_for(query))
+        self._check_compiled(corrected, catalog)
+        self._pending_syntax.add(corrected._seal)
+        return corrected
+
     def correct_schema_binding(self, query: CompiledQuery, plan: AnalysisPlan, owner: str) -> CompiledQuery:
         if not is_trusted_compiled(query):
             raise ExecutionError("untrusted_compiled_query")
@@ -600,8 +619,12 @@ class BigQueryTurn:
         self._successful_retry_purposes.intersection_update({"catalog"})
         for purpose in ("analysis", "coverage", "customer_check"):
             self._completed_jobs.pop(purpose, None)
-        completed = self._run(query.sql, query.parameters,
-                              max_rows=query.result_contract.max_rows, purpose="analysis")
+        try:
+            completed = self._run(query.sql, query.parameters,
+                                  max_rows=query.result_contract.max_rows, purpose="analysis")
+        except ExecutionError as failure:
+            failure.analysis_submission_state = failure.submission_state
+            raise
         phase = "customer_check" if query.operation == Operation.RANK_CUSTOMERS else "coverage"
         try:
             if query.operation == Operation.RANK_CUSTOMERS:

@@ -148,24 +148,34 @@ class AnalysisExecutor:
         except ExecutionError as exc:
             if exc.category not in {"query_syntax_error", "query_schema_error"}:
                 raise
-            available = hasattr(turn.warehouse, "correct_schema_binding")
-            remaining = turn.warehouse.recovery_available() if available else True
+            available = (not turn.correction_started
+                         and hasattr(turn.warehouse, "correct_schema_binding"))
+            syntax_available = (not turn.correction_started
+                                and hasattr(turn.warehouse, "correct_query_syntax")
+                                and exc.purpose == 'analysis'
+                                and exc.analysis_submission_state == SubmissionState.NOT_SUBMITTED)
+            remaining = turn.warehouse.recovery_available() if hasattr(turn.warehouse, "recovery_available") else True
             decision = decide_recovery(FailureContext(
                 exc.category, exc.stage,
                 SubmissionState.SUBMITTED if exc.analysis_submission_state == SubmissionState.SUBMITTED else exc.submission_state,
                 budget_available=remaining, deadline_available=turn.context.budget.remaining() > 0,
-                schema_inspection_available=available))
-            if decision.action != "inspect_schema":
+                schema_inspection_available=available, syntax_correction_available=syntax_available))
+            if decision.action not in {"inspect_schema", "correct_syntax"}:
                 if not exc.recovery_recorded:
                     turn.context.trace.emit("recovery", action=decision.action, reason=decision.reason, outcome=terminal_outcome(decision))
                 raise
+            turn.correction_started = True
             turn.context.trace.emit("recovery", action=decision.action, reason=decision.reason, outcome="attempted")
+            corrected = None
             try:
-                corrected = turn.warehouse.correct_schema_binding(query, source_plan, turn.context.owner)
+                corrected = (turn.warehouse.correct_query_syntax(query, source_plan, turn.context.owner)
+                             if decision.action == 'correct_syntax' else
+                             turn.warehouse.correct_schema_binding(query, source_plan, turn.context.owner))
                 self.check_versions(turn, corrected)
                 turn.context.trace.emit("sql_validation", status="ok", operation=source_plan.operation.value,
                            metric=source_plan.metric.value)
-                turn.context.trace.emit("recovery", action="recompile_supported_binding", reason="binding_changed", outcome="attempted")
+                if decision.action == 'inspect_schema':
+                    turn.context.trace.emit("recovery", action="recompile_supported_binding", reason="binding_changed", outcome="attempted")
                 item = turn.warehouse.execute_compiled(corrected)
             except (ExecutionError, PolicyError) as failure:
                 terminal = decide_recovery(FailureContext(
@@ -174,8 +184,13 @@ class AnalysisExecutor:
                     SubmissionState.SUBMITTED if getattr(failure, "analysis_submission_state", "unknown") == "submitted"
                     else getattr(failure, "submission_state", SubmissionState.UNKNOWN),
                     budget_available=turn.warehouse.recovery_available(), deadline_available=turn.context.budget.remaining() > 0))
-                if not getattr(failure, "recovery_recorded", False):
-                    turn.context.trace.emit("recovery", action="stop", reason=terminal.reason, outcome=terminal_outcome(terminal))
+                if decision.action == "correct_syntax" or not getattr(failure, "recovery_recorded", False):
+                    outcome = terminal_outcome(terminal)
+                    if decision.action == 'correct_syntax':
+                        unsupported = corrected is None and getattr(failure, 'code', '') == 'query_syntax_error'
+                        outcome = 'unsupported' if unsupported else 'failed'
+                    turn.context.trace.emit("recovery", action=decision.action,
+                                            reason=terminal.reason, outcome=outcome)
                 raise
             return item, corrected
 

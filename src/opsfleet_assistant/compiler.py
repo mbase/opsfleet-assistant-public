@@ -360,3 +360,42 @@ def execution_fingerprint(query: CompiledQuery) -> str:
     canonical_sql = sqlglot.parse_one(query.sql, read="bigquery").sql(dialect="bigquery")
     material = (canonical_sql, query.parameters)
     return hashlib.sha256(repr(material).encode()).hexdigest()
+
+
+def correct_syntax(query: CompiledQuery, plan: AnalysisPlan, scope: BrandScope,
+                   catalog: Catalog, *, binding: SourceBinding) -> CompiledQuery:
+    """Only repair the non-Standard-SQL == spelling of equality.
+
+    Token boundaries exclude literals/comments. Exact AST equality against a
+    newly authorized compilation establishes structure, beyond metadata hashes.
+    All other grammar failures and mutations remain unsupported.
+    """
+    if not is_trusted_compiled(query):
+        raise PolicyError('untrusted_compiled_query')
+    expected = compile_plan(plan, scope, catalog, binding=binding, temporal_role=query.temporal_role)
+    if replace(query, sql=expected.sql, _seal='') != replace(expected, _seal=''):
+        raise PolicyError('recovery_scope_changed')
+    try:
+        original = sqlglot.parse(query.sql, read='bigquery')
+        trusted = sqlglot.parse(expected.sql, read='bigquery')
+        if (len(original) != 1 or not isinstance(original[0], exp.Select)
+                or original != trusted):
+            raise PolicyError('recovery_scope_changed')
+        tokens = sqlglot.Dialect.get_or_raise('bigquery').tokenize(query.sql)
+        positions = [t for t in tokens if t.token_type.name == 'EQ' and t.text == '==']
+        if not positions:
+            raise PolicyError('query_syntax_error')
+        sql = query.sql
+        for token in reversed(positions):
+            sql = sql[:token.start] + '=' + sql[token.end + 1:]
+        corrected = sqlglot.parse(sql, read='bigquery')
+        if corrected != trusted or sql == query.sql:
+            raise PolicyError('recovery_scope_changed')
+        validate_source_fields(corrected[0], demographic=plan.operation in {
+            Operation.DEMOGRAPHIC_COMPARISON, Operation.REGIONAL_SPEND, Operation.CHURN_CHANGE})
+    except PolicyError:
+        raise
+    except Exception:
+        raise PolicyError('query_syntax_error') from None
+    result = replace(expected, sql=sql, _seal='')
+    return replace(result, _seal=_signature(result))

@@ -37,7 +37,7 @@ WORDS = frozenset({
     "revenue", "order_count", "average_order_value", "customer_count", "customer_spend",
     "average_customer_spend", "churn_rate", "syntax", "schema", "transient", "budget",
     "empty", "metadata", "policy", "provider", "storage", "internal", "success",
-    "inspect_schema", "recompile_supported_binding", "schema_rejection", "binding_changed",
+    "correct_syntax", "inspect_schema", "recompile_supported_binding", "schema_rejection", "binding_changed",
     "retry_before_submission", "transient_before_submission", "submission_unsafe", "retry_limit", "billing_uncertain", "correction_unavailable", "not_retryable", "exhausted", "attempted",
     "retry", "repair", "fallback", "stop", "valid_empty", "source_empty", "coverage_mismatch",
     "saved", "reused", "failed", "previewed", "cancelled", "expired", "stale",

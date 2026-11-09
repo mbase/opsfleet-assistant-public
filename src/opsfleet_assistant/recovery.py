@@ -19,17 +19,18 @@ class FailureContext:
     budget_available: bool = False
     deadline_available: bool = False
     schema_inspection_available: bool = False
+    syntax_correction_available: bool = False
 
 
 @dataclass(frozen=True)
 class RecoveryDecision:
-    action: Literal["stop", "retry_before_submission", "inspect_schema", "recompile_supported_binding"]
+    action: Literal["stop", "retry_before_submission", "inspect_schema", "recompile_supported_binding", "correct_syntax"]
     reason: str
 
 
 @dataclass(frozen=True)
 class RecoveryOutcome:
-    action: Literal["stop", "retry_before_submission", "inspect_schema", "recompile_supported_binding"]
+    action: Literal["stop", "retry_before_submission", "inspect_schema", "recompile_supported_binding", "correct_syntax"]
     reason: str
     outcome: Literal["attempted", "success", "failed", "unsupported", "exhausted"]
     inputs_changed: bool = False
@@ -44,6 +45,9 @@ def decide_recovery(context: FailureContext) -> RecoveryDecision:
         return RecoveryDecision('stop', 'exhausted')
     if context.submission != SubmissionState.NOT_SUBMITTED:
         return RecoveryDecision('stop', 'submission_unsafe')
+    if (context.category == 'query_syntax_error' and context.stage == 'dry_run'
+            and context.syntax_correction_available):
+        return RecoveryDecision('correct_syntax', 'syntax')
     if context.category == 'query_schema_error' and context.schema_inspection_available:
         return RecoveryDecision('inspect_schema', 'schema_rejection')
     if context.category in {'query_schema_error', 'query_syntax_error', 'compiler_syntax_error'}:

@@ -60,6 +60,7 @@ class TurnSession:
         self.authority: TurnAuthority | None = None
         self.completed_analysis: CompletedAnalysis | None = None
         self.context_queries: tuple[CompiledQuery, ...] = ()
+        self.correction_started = False  # One schema OR syntax correction across all analyses.
         self.catalog_digest = ""
         self.cohort: CohortOrigin | None = None
         self.clean_question = ""
